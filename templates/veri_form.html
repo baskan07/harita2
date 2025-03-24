@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Veri Ekle</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 50px; }
+        form { display: inline-block; text-align: left; }
+        input { display: block; width: 300px; padding: 10px; margin: 10px 0; }
+        button { padding: 10px 20px; background: green; color: white; border: none; cursor: pointer; }
+        #map { height: 400px; width: 80%; margin: auto; }
+        .flash-success { color: green; }
+        .flash-danger { color: red; }
+    </style>
+</head>
+<body>
+
+    <h2>Veri Ekle</h2>
+
+    {% with messages = get_flashed_messages(with_categories=True) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <p class="flash-{{ category }}">{{ message }}</p>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div id="map"></div> <!-- Harita Burada -->
+
+    <form action="/veri" method="post">
+        <label>Enlem (Latitude):</label>
+        <input type="text" id="latitude" name="latitude" required readonly>
+
+        <label>Boylam (Longitude):</label>
+        <input type="text" id="longitude" name="longitude" required readonly>
+
+        <label>Sıcaklık (°C):</label>
+        <input type="text" name="temperature" required>
+
+        <label>Nem (%):</label>
+        <input type="text" name="humidity" required>
+
+        <button type="submit">Veriyi Kaydet</button>
+    </form>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        // Haritayı oluştur
+        var map = L.map('map').setView([36.8841, 30.7056], 12); // Antalya Ormanı merkez alındı
+
+        // OpenStreetMap katmanını ekle
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        var marker; // Haritada işaretçi (marker) tanımlanacak
+
+        // Haritaya tıklanınca çalışacak fonksiyon
+        map.on('click', function(e) {
+            var lat = e.latlng.lat.toFixed(6);  // Enlem
+            var lon = e.latlng.lng.toFixed(6);  // Boylam
+
+            // Form alanlarına koordinatları otomatik yaz
+            document.getElementById('latitude').value = lat;
+            document.getElementById('longitude').value = lon;
+
+            // Daha önce bir marker eklenmişse kaldır
+            if (marker) {
+                map.removeLayer(marker);
+            }
+
+            // Yeni tıklanan yere işaretçi ekle
+            marker = L.marker([lat, lon]).addTo(map)
+                .bindPopup("Seçilen Nokta<br>Latitude: " + lat + "<br>Longitude: " + lon)
+                .openPopup();
+        });
+    </script>
+
+</body>
+</html>
