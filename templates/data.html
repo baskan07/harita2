@@ -4,47 +4,72 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sıcaklık ve Nem Haritası</title>
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    
+
     <style>
         #map { height: 600px; }
+        .info-box {
+            position: relative;
+            width: 100%;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 10px 20px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
     <h1>Sıcaklık ve Nem Haritası</h1>
+    
     <div id="map"></div>
+    <div class="info-box" id="infoBox">Mouse'u harita üzerinde gezdirin...</div>
 
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+    
     <script>
-        // Haritayı oluşturma ve başlangıç konumunu ayarlama (örneğin, Türkiye'nin koordinatları)
         var map = L.map('map').setView([36.8, 30.7], 11);
-
-        // OpenStreetMap katmanını ekleyin
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        // API'den veriyi çekme
-    fetch('/data')
-    .then(response => response.json())
-    .then(data => {
-        data.forEach(point => {
-            // 1 km (1000 metre) çapında bir daire oluştur
-            var circle = L.circle([point.latitude, point.longitude], {
-                color: 'red',         // Çizgi rengi
-                fillColor: '#f03',    // Doldurma rengi
-                fillOpacity: 0.5,     // Şeffaflık
-                radius: 150           // Yarıçap (metre cinsinden)
-            }).addTo(map);
+        var heatData = [];
+        var sensorData = [];
 
-            // Popup ekleyerek sıcaklık ve nem bilgilerini göster
-            circle.bindPopup("<b>Sıcaklık:</b> " + point.temperature + "°C<br><b>Nem:</b> " + point.humidity + "%");
+        fetch('/data')
+        .then(response => response.json())
+        .then(data => {
+            sensorData = data;
+            heatData = data.map(point => [point.latitude, point.longitude, point.heat_index / 50]);
+            L.heatLayer(heatData, { radius: 25, blur: 15, maxZoom: 10 }).addTo(map);
         });
-    })
-    .catch(error => console.error('Veri çekme hatası:', error));
+
+        function getNearestTemperature(lat, lon) {
+            let minDist = Infinity;
+            let nearestTemp = null;
+            
+            sensorData.forEach(point => {
+                let dist = Math.sqrt(Math.pow(lat - point.latitude, 2) + Math.pow(lon - point.longitude, 2));
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearestTemp = point.heat_index;
+                }
+            });
+
+            return nearestTemp;
+        }
+
+        map.on('mousemove', function(e) {
+            let nearestTemp = getNearestTemperature(e.latlng.lat, e.latlng.lng);
+            if (nearestTemp !== null) {
+                document.getElementById('infoBox').innerText = `Hissedilen Sıcaklık: ${nearestTemp}°C`;
+            }
+        });
     </script>
 </body>
 </html>
