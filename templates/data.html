@@ -33,7 +33,7 @@
     .then(data => {
         data.forEach(point => {
             // 1 km (1000 metre) çapında bir daire oluştur
-            var circle = L.circle([point.latitude, point.longtitude], {
+            var circle = L.circle([point.latitude, point.longitude], {
                 color: 'red',         // Çizgi rengi
                 fillColor: '#f03',    // Doldurma rengi
                 fillOpacity: 0.5,     // Şeffaflık
