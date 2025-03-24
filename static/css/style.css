@@ -1,0 +1,44 @@
+/* Sayfanın arka planını ve genel stilini düzenleme */
+body {
+    font-family: Arial, sans-serif;
+    background: url('background.jpg') no-repeat center center fixed;
+    background-size: cover;
+    text-align: center;
+    color: white;
+    margin: 0;
+    padding: 0;
+}
+
+/* Başlık Stili */
+h1 {
+    font-size: 28px;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 10px;
+    border-radius: 10px;
+    display: inline-block;
+    margin-top: 20px;
+}
+
+/* Harita alanını şık hale getirme */
+#map {
+    height: 600px;
+    width: 80%;
+    margin: 20px auto;
+    border-radius: 15px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+/* Leaflet harita içindeki popup'ları daha güzel göstermek */
+.leaflet-popup-content {
+    font-size: 16px;
+    font-weight: bold;
+    color: black;
+}
+
+/* Küçük ekranlarda haritanın responsive olması */
+@media (max-width: 768px) {
+    #map {
+        width: 95%;
+        height: 400px;
+    }
+}
