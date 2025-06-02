@@ -92,8 +92,12 @@
         });
 
         map.on('zoomend', function() {
-            drawHeatLayer();
-        });
+  heatmap.setOptions({
+    radius: getRadiusForZoom(map.getZoom()),
+    blur: getBlurForZoom(map.getZoom())
+  });
+  heatmap.redraw();
+});
 
         map.on('mousemove', function(e) {
             let nearestTemp = getNearestTemperature(e.latlng.lat, e.latlng.lng);
