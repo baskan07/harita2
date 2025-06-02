@@ -6,11 +6,11 @@ app = Flask(__name__)
 app.secret_key = "gizli_anahtar"
 
 # PostgreSQL bağlantısı
-db = psycopg2.connect(
-    host="dpg-cv501saj1k6c73beessg-a.frankfurt-postgres.render.com",
-    database="sensor_data_db",
-    user="sensor_user",
-    password="s7lCV9If5p67V7WkxgktD3n6JaO3bc7Y"
+conn = psycopg2.connect(
+    host="dpg-d0untvp5pdvs73a276e0-a.frankfurt-postgres.render.com",
+    database="sensor_data_db_1mjp",
+    user="sensor_data_db_1mjp_user",
+    password="OKPCNZaDSyCp9tyyzOiEipYsjyQTb8NW"
 )
 cursor = db.cursor()
 
