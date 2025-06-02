@@ -31,6 +31,8 @@
             line-height: 1.4;
             font-size: 12px;
             box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            color: white;
+            z-index: 1000;
         }
         .legend i {
             width: 18px;
@@ -38,6 +40,7 @@
             float: left;
             margin-right: 8px;
             opacity: 0.8;
+            border-radius: 3px;
         }
     </style>
 </head>
@@ -45,7 +48,7 @@
     <h1>Sıcaklık ve Nem Haritası</h1>
 
     <div id="map"></div>
-    <div class="info-box" id="infoBox">Mouse'u harita üzerinde gezdirin...</div>
+    <div class="info-box" id="infoBox">Harita üzerinde gezerek sıcaklık değerlerini görün...</div>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
@@ -60,23 +63,25 @@
         let sensorData = [];
         let heatLayer = null;
 
+        // Sıcaklık değerlerine göre heatmap ayarları
         function calculateHeatLayerOptions() {
             const zoom = map.getZoom();
             const radius = zoom * 3.5;
-            const blur = zoom >= 13 ? 10 : 18;
+            const blur = zoom >= 13 ? 10 : 15;
 
             return {
                 radius: radius,
                 blur: blur,
                 maxZoom: 18,
-                minOpacity: 0.35,
-                max: 1.0,
+                minOpacity: 0.4,
+                max: 50,  // Maksimum sıcaklık değeri (heat_index için)
                 gradient: {
-                    0.0: '#2c7bb6',
-                    0.25: '#abd9e9',
-                    0.5: '#ffffbf',
-                    0.75: '#fdae61',
-                    1.0: '#d7191c'
+                    0.0: '#2c7bb6',   // 0°C - Mavi
+                    0.2: '#00b4d8',   // 10°C
+                    0.4: '#48cae4',    // 20°C
+                    0.6: '#90e0ef',    // 30°C
+                    0.8: '#ffd166',    // 40°C
+                    1.0: '#ef476f'     // 50°C+ - Kırmızı
                 }
             };
         }
@@ -88,68 +93,96 @@
             heatLayer = L.heatLayer(heatData, calculateHeatLayerOptions()).addTo(map);
         }
 
+        // En yakın sıcaklık değerini bulma
         function getNearestTemperature(lat, lon) {
             let minDist = Infinity;
-            let nearestTemp = null;
+            let nearestPoint = null;
+            
             sensorData.forEach(point => {
-                let dist = Math.sqrt(Math.pow(lat - point.latitude, 2) + Math.pow(lon - point.longitude, 2));
+                const dist = Math.sqrt(
+                    Math.pow(lat - point.latitude, 2) + 
+                    Math.pow(lon - point.longitude, 2)
+                );
+                
                 if (dist < minDist) {
                     minDist = dist;
-                    nearestTemp = point.heat_index;
+                    nearestPoint = point;
                 }
             });
-            return nearestTemp;
+            
+            return nearestPoint;
         }
 
+        // Verileri yükle ve haritayı oluştur
         fetch('/data')
             .then(response => response.json())
             .then(data => {
                 sensorData = data;
+                
+                // Heatmap verisini oluştur (latitude, longitude, heat_index)
                 heatData = data.map(p => [
                     p.latitude,
                     p.longitude,
-                    Math.min(p.heat_index, 100) / 100
+                    p.heat_index  // Normalize etmeden direkt heat_index değerini kullan
                 ]);
+                
+                // Heatmap katmanını çiz
                 drawHeatLayer();
 
+                // Her veri noktası için görünmez marker ekle (popup için)
                 data.forEach(p => {
                     const marker = L.circleMarker([p.latitude, p.longitude], {
                         radius: 6,
                         color: 'white',
                         weight: 1,
                         fillColor: 'black',
-                        fillOpacity: 0.0  // görünmez ama etkileşimli
+                        fillOpacity: 0.0  // Görünmez ama tıklanabilir
                     }).addTo(map);
 
                     marker.bindPopup(`
+                        <b>Konum:</b> ${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}<br>
                         <b>Hissedilen Sıcaklık:</b> ${p.heat_index}°C<br>
-                        <b>Nem:</b> ${p.humidity}%<br>
-                        <b>Gerçek Sıcaklık:</b> ${p.temperature}°C
+                        <b>Gerçek Sıcaklık:</b> ${p.temperature}°C<br>
+                        <b>Nem:</b> ${p.humidity}%
                     `);
                 });
+            })
+            .catch(error => {
+                console.error('Veri yüklenirken hata oluştu:', error);
+                document.getElementById('infoBox').innerText = 'Veri yüklenirken hata oluştu. Lütfen sayfayı yenileyin.';
             });
 
-        map.on('zoomend', () => {
-            drawHeatLayer();
-        });
+        // Yakınlaştırma/uzaklaştırma yapıldığında heatmap'i yeniden çiz
+        map.on('zoomend', drawHeatLayer);
 
+        // Fare hareketlerinde en yakın sıcaklık değerini göster
         map.on('mousemove', (e) => {
-            let nearestTemp = getNearestTemperature(e.latlng.lat, e.latlng.lng);
-            if (nearestTemp !== null) {
-                document.getElementById('infoBox').innerText = `Hissedilen Sıcaklık: ${nearestTemp}°C`;
+            const point = getNearestTemperature(e.latlng.lat, e.latlng.lng);
+            if (point) {
+                document.getElementById('infoBox').innerHTML = `
+                    <b>Hissedilen Sıcaklık:</b> ${point.heat_index}°C | 
+                    <b>Gerçek Sıcaklık:</b> ${point.temperature}°C | 
+                    <b>Nem:</b> ${point.humidity}%
+                `;
             }
         });
 
-        // Legend
+        // Lejant (renk skalası) ekle
         const legend = L.control({position: 'bottomleft'});
         legend.onAdd = function(map) {
             const div = L.DomUtil.create('div', 'legend');
-            const grades = [0, 25, 50, 75, 100];
-            const colors = ['#2c7bb6','#abd9e9','#ffffbf','#fdae61','#d7191c'];
-
+            const grades = [0, 10, 20, 30, 40, 50];
+            const colors = ['#2c7bb6', '#00b4d8', '#48cae4', '#90e0ef', '#ffd166', '#ef476f'];
+            
+            div.innerHTML = '<strong>Sıcaklık (°C)</strong><br>';
+            
             for (let i = 0; i < grades.length; i++) {
-                div.innerHTML += `<i style="background:${colors[i]}"></i> ${grades[i]}${grades[i + 1] ? '&ndash;' + grades[i + 1] : '+'}°C<br>`;
+                div.innerHTML += `
+                    <i style="background:${colors[i]}"></i> 
+                    ${grades[i]}${grades[i + 1] ? '–' + grades[i + 1] : '+'}°C<br>
+                `;
             }
+            
             return div;
         };
         legend.addTo(map);
