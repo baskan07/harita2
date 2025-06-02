@@ -56,7 +56,7 @@ def veri_ekle():
 
             query = "INSERT INTO sensor_okuma (latitude, longitude, temperature, humidity) VALUES (%s, %s, %s, %s)"
             cursor.execute(query, (latitude, longitude, temperature, humidity))
-            db.commit()
+            conn.commit()
 
             flash("Veri başarıyla eklendi!", "success")
             return redirect(url_for('veri_ekle'))
