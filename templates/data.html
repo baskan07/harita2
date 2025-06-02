@@ -54,19 +54,26 @@
         }
 
         function drawHeatLayer() {
-            const zoom = map.getZoom();
-            const radius = zoom * 2.5; // Zoom arttıkça daha büyük radius
+    const zoom = map.getZoom();
+    const radius = zoom * 3.2;  // radius artırıldı
+    const maxIntensity = 1.0;   // yoğunluğu sınıra kadar çekiyoruz
 
-            if (heatLayer) {
-                map.removeLayer(heatLayer);
-            }
+    if (heatLayer) {
+        map.removeLayer(heatLayer);
+    }
 
-            heatLayer = L.heatLayer(heatData, {
-                radius: radius,
-                blur: 25,
-                maxZoom: 18
-            }).addTo(map);
+    heatLayer = L.heatLayer(heatData, {
+        radius: radius,
+        blur: 15,              // daha keskin kenarlar için azaltıldı
+        maxZoom: 18,
+        gradient: {
+            0.0: 'blue',
+            0.4: 'lime',
+            0.7: 'orange',
+            1.0: 'red'
         }
+    }).addTo(map);
+}
 
         function getNearestTemperature(lat, lon) {
             let minDist = Infinity;
