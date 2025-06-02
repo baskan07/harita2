@@ -60,6 +60,7 @@
         let heatData = [];
         let sensorData = [];
         let heatLayer = null;
+        let heat = null;
 
         function calculateHeatLayerOptions(maxHeat) {
             const zoom = map.getZoom();
@@ -182,7 +183,6 @@
             });
 
         map.on('zoomend', function() {
-            let heat = null;
             drawHeatLayer();
         });
 
