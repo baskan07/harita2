@@ -3,14 +3,11 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Sıcaklık ve Nem Haritası</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+    <title>Sıcaklık ve Nem Haritası (Interpolasyonlu)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-
     <style>
         #map { height: 600px; }
         .info-box {
-            position: relative;
             width: 100%;
             text-align: center;
             background: rgba(0, 0, 0, 0.6);
@@ -42,8 +39,7 @@
     </style>
 </head>
 <body>
-    <h1>Sıcaklık ve Nem Haritası</h1>
-
+    <h1>Sıcaklık ve Nem Haritası (Gerçek Isı Dağılımı)</h1>
     <div id="map"></div>
     <div class="info-box" id="infoBox">Mouse'u harita üzerinde gezdirin...</div>
 
@@ -57,34 +53,6 @@
         }).addTo(map);
 
         let sensorData = [];
-
-        function getColorFromTemperature(temp) {
-            return temp > 40 ? '#d7191c' :
-                   temp > 35 ? '#fdae61' :
-                   temp > 30 ? '#ffffbf' :
-                   temp > 25 ? '#abd9e9' :
-                               '#2c7bb6';
-        }
-
-        function drawMarkers() {
-            sensorData.forEach(p => {
-                const color = getColorFromTemperature(p.heat_index);
-
-                const marker = L.circleMarker([p.latitude, p.longitude], {
-                    radius: 10,
-                    fillColor: color,
-                    fillOpacity: 0.8,
-                    color: "#000",
-                    weight: 1
-                }).addTo(map);
-
-                marker.bindPopup(`
-                    <b>Hissedilen Sıcaklık:</b> ${p.heat_index}°C<br>
-                    <b>Nem:</b> ${p.humidity}%<br>
-                    <b>Gerçek Sıcaklık:</b> ${p.temperature}°C
-                `);
-            });
-        }
 
         function getNearestTemperature(lat, lon) {
             let minDist = Infinity;
@@ -103,14 +71,14 @@
             .then(response => response.json())
             .then(data => {
                 sensorData = data;
-        
+
                 const idwLayer = L.idwLayer(
                     data.map(p => [p.latitude, p.longitude, p.heat_index]),
                     {
-                        opacity: 0.75,
-                        cellSize: 10,
+                        opacity: 0.8,
+                        cellSize: 12,
                         exp: 2,
-                        max: 50, // max sıcaklık
+                        max: 50,
                         gradient: {
                             0.0: '#2c7bb6',
                             0.25: '#abd9e9',
@@ -120,7 +88,24 @@
                         }
                     }
                 ).addTo(map);
+
+                data.forEach(p => {
+                    const marker = L.circleMarker([p.latitude, p.longitude], {
+                        radius: 6,
+                        color: 'white',
+                        weight: 1,
+                        fillColor: 'black',
+                        fillOpacity: 0.0
+                    }).addTo(map);
+
+                    marker.bindPopup(`
+                        <b>Hissedilen Sıcaklık:</b> ${p.heat_index}°C<br>
+                        <b>Nem:</b> ${p.humidity}%<br>
+                        <b>Gerçek Sıcaklık:</b> ${p.temperature}°C
+                    `);
+                });
             });
+
         map.on('mousemove', (e) => {
             let nearestTemp = getNearestTemperature(e.latlng.lat, e.latlng.lng);
             if (nearestTemp !== null) {
@@ -132,8 +117,8 @@
         const legend = L.control({position: 'bottomleft'});
         legend.onAdd = function(map) {
             const div = L.DomUtil.create('div', 'legend');
-            const grades = [0, 25, 30, 35, 40];
-            const colors = ['#2c7bb6','#abd9e9','#ffffbf','#fdae61','#d7191c'];
+            const grades = [0, 10, 20, 30, 40, 50];
+            const colors = ['#2c7bb6','#abd9e9','#ffffbf','#fdae61','#d7191c','#a50026'];
 
             for (let i = 0; i < grades.length; i++) {
                 div.innerHTML +=
