@@ -82,32 +82,56 @@
             };
         }
 
-        function drawHeatLayer() {
-            if (heatLayer) {
-                map.removeLayer(heatLayer);
+        function drawHeatLayer(data) {
+    // Temizlik: Mevcut heat layer varsa kaldır
+            if (heat) {
+                map.removeLayer(heat);
             }
         
-            const heatValues = sensorData.map(p => p.heat_index);
-            const minHeat = Math.min(...heatValues);
-            const maxHeat = Math.max(...heatValues);
-        
-            // Normalized gradient oluştur
-            const gradient = {};
-            const colors = ['#2c7bb6', '#abd9e9', '#ffffbf', '#fdae61', '#d7191c'];
-            const steps = colors.length;
-            for (let i = 0; i < steps; i++) {
-                const t = i / (steps - 1); // normalize (0.0–1.0)
-                gradient[t] = colors[i];
+            if (!data || data.length === 0) {
+                console.error("Veri yok.");
+                return;
             }
+        
+            // Sıcaklık değerlerini çek
+            const temps = data.map(p => parseFloat(p.hissedilen_sicaklik)).filter(t => !isNaN(t));
+        
+            const minTemp = Math.min(...temps);
+            const maxTemp = Math.max(...temps);
+        
+            if (minTemp === maxTemp) {
+                console.warn("Tüm sıcaklıklar aynı, normalize edilemiyor.");
+            }
+        
+            // Normalize et ve heatData'ya aktar
+            const heatData = data.map(p => {
+                const lat = parseFloat(p.latitude);
+                const lng = parseFloat(p.longitude);
+                const temp = parseFloat(p.hissedilen_sicaklik);
+        
+                if (isNaN(lat) || isNaN(lng) || isNaN(temp)) return null;
+        
+                const normalized = (temp - minTemp) / (maxTemp - minTemp); // 0 ile 1 arası
+        
+                return [lat, lng, normalized];
+            }).filter(e => e !== null);
+        
+            // Gradient ayarları (0–1 arasında olmalı yoksa addColorStop hata verir)
+            const gradient = {
+                0.0: '#0000FF',   // mavi (soğuk)
+                0.25: '#00FFFF',  // açık mavi
+                0.5: '#FFFF00',   // sarı
+                0.75: '#FFA500',  // turuncu
+                1.0: '#FF0000'    // kırmızı (sıcak)
+            };
         
             // Heat layer oluştur
-            heatLayer = L.heatLayer(heatData, {
-                radius: map.getZoom() * 3.5,
-                blur: map.getZoom() >= 13 ? 10 : 18,
-                maxZoom: 18,
-                minOpacity: 0.35,
-                max: maxHeat, // raw heat değeri
-                gradient: gradient
+            heat = L.heatLayer(heatData, {
+                radius: 25,
+                blur: 15,
+                maxZoom: 17,
+                gradient: gradient,
+                minOpacity: 0.5
             }).addTo(map);
         }
 
