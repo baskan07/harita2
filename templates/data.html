@@ -55,11 +55,8 @@
         .grid-cell {
             border: 1px solid rgba(255,255,255,0.2);
             border-radius: 4px;
-            transition: all 0.3s ease;
-        }
-        .grid-cell:hover {
-            opacity: 0.8;
-            transform: scale(1.05);
+            transition: none;
+            pointer-events: auto;
         }
         .marker-cluster-small {
             background-color: rgba(77, 144, 254, 0.6);
@@ -172,11 +169,10 @@
         function createGridLayer() {
             if (gridLayer) map.removeLayer(gridLayer);
             
-            const gridSize = map.getZoom() < 11 ? 0.05 : 0.02; // Daha yakın zoom seviyelerinde kareleşme
+            const gridSize = map.getZoom() < 11 ? 0.05 : 0.02;
             const gridData = {};
             let hasHighRiskCells = false;
             
-            // Verileri ızgara hücrelerine grupla
             sensorData.forEach(point => {
                 const lat = Math.floor(point.latitude / gridSize) * gridSize;
                 const lng = Math.floor(point.longitude / gridSize) * gridSize;
@@ -188,47 +184,46 @@
                         lng: lng + gridSize/2,
                         points: [],
                         sumTemp: 0,
+                        sumHeatIndex: 0,
                         maxTemp: -Infinity
                     };
                 }
                 
                 gridData[key].points.push(point);
-                gridData[key].sumTemp += point.heat_index;
+                gridData[key].sumTemp += point.temperature;
+                gridData[key].sumHeatIndex += point.heat_index;
                 if (point.heat_index > gridData[key].maxTemp) {
                     gridData[key].maxTemp = point.heat_index;
                 }
             });
             
-            // Izgara katmanını oluştur
             gridLayer = L.layerGroup();
             
             Object.values(gridData).forEach(cell => {
                 const avgTemp = cell.sumTemp / cell.points.length;
-                const color = getColorForTemperature(avgTemp);
+                const avgHeatIndex = cell.sumHeatIndex / cell.points.length;
+                const color = getColorForTemperature(avgHeatIndex);
                 
-                // Hücre stilleri - yüksek riskli hücreler için özel stil
                 const isHighRisk = cell.maxTemp >= 50;
                 if (isHighRisk) hasHighRiskCells = true;
-                
-                const cellStyle = {
-                    color: isHighRisk ? '#ff0000' : '#fff',
-                    weight: isHighRisk ? 2 : 0.5,
-                    fillColor: color,
-                    fillOpacity: 0.7,
-                    className: isHighRisk ? 'grid-cell pulse-effect' : 'grid-cell'
-                };
                 
                 const cellMarker = L.rectangle([
                     [cell.lat - gridSize/2, cell.lng - gridSize/2],
                     [cell.lat + gridSize/2, cell.lng + gridSize/2]
-                ], cellStyle).addTo(gridLayer);
+                ], {
+                    color: isHighRisk ? '#ff0000' : '#fff',
+                    weight: isHighRisk ? 2 : 0.5,
+                    fillColor: color,
+                    fillOpacity: 0.7,
+                    className: 'grid-cell' + (isHighRisk ? ' pulse-effect' : '')
+                }).addTo(gridLayer);
                 
-                // Hücreye tıklandığında detayları göster
                 let popupContent = `
                     <div style="min-width:220px">
                         <b>Ortalama Sıcaklık:</b> ${avgTemp.toFixed(1)}°C<br>
-                        <b>Maksimum Sıcaklık:</b> <span class="${cell.maxTemp >= 40 ? 'risk-high' : ''}">${cell.maxTemp.toFixed(1)}°C</span><br>
-                        <b>Sıcaklık Aralığı:</b> ${getRangeLabel(avgTemp)}<br>
+                        <b>Ortalama Hissedilen:</b> <span class="${avgHeatIndex >= 40 ? 'risk-high' : ''}">${avgHeatIndex.toFixed(1)}°C</span><br>
+                        <b>Maksimum Hissedilen:</b> <span class="${cell.maxTemp >= 40 ? 'risk-high' : ''}">${cell.maxTemp.toFixed(1)}°C</span><br>
+                        <b>Ortalama Nem:</b> ${(cell.points.reduce((sum, p) => sum + p.humidity, 0) / cell.points.length).toFixed(1)}%<br>
                         <b>Nokta Sayısı:</b> ${cell.points.length}
                 `;
                 
@@ -240,7 +235,6 @@
                 cellMarker.bindPopup(popupContent);
             });
             
-            // Yüksek riskli hücreler varsa uyarı göster
             if (hasHighRiskCells) {
                 document.getElementById('infoBox').innerHTML = 
                     '<span class="risk-high">⚠️ TEHLİKELİ SICAKLIK BÖLGELERİ TESPİT EDİLDİ! - Haritada kırmızı ile işaretlenmiş alanlarda 50°C üzeri sıcaklık ölçümleri bulunmaktadır.</span>';
@@ -256,8 +250,9 @@
             markerCluster.clearLayers();
             
             sensorData.forEach(point => {
-                const temp = point.heat_index;
-                const color = getColorForTemperature(temp);
+                const temp = point.temperature;
+                const heatIndex = point.heat_index;
+                const color = getColorForTemperature(heatIndex);
                 
                 const marker = L.circleMarker([point.latitude, point.longitude], {
                     radius: 6,
@@ -266,16 +261,17 @@
                     weight: 1,
                     opacity: 1,
                     fillOpacity: 0.8,
-                    temperature: temp
+                    temperature: heatIndex
                 });
                 
                 marker.bindPopup(`
                     <div style="min-width:200px">
                         <b>Konum:</b> ${point.latitude.toFixed(4)}, ${point.longitude.toFixed(4)}<br>
-                        <b>Sıcaklık:</b> <span class="${temp >= 40 ? 'risk-high' : ''}">${temp.toFixed(1)}°C</span><br>
+                        <b>Sıcaklık:</b> ${temp.toFixed(1)}°C<br>
+                        <b>Hissedilen Sıcaklık:</b> <span class="${heatIndex >= 40 ? 'risk-high' : ''}">${heatIndex.toFixed(1)}°C</span><br>
                         <b>Nem:</b> ${point.humidity.toFixed(1)}%<br>
                         <b>Ölçüm Zamanı:</b> ${point.timestamp || 'Bilinmiyor'}
-                        ${temp >= 50 ? '<br><span class="risk-high">⚠️ TEHLİKELİ SICAKLIK!</span>' : ''}
+                        ${heatIndex >= 50 ? '<br><span class="risk-high">⚠️ TEHLİKELİ SICAKLIK!</span>' : ''}
                     </div>
                 `);
                 
@@ -333,12 +329,13 @@
         map.on('mousemove', (e) => {
             const point = getNearestPoint(e.latlng.lat, e.latlng.lng);
             if (point) {
-                const temp = point.heat_index;
+                const temp = point.temperature;
+                const heatIndex = point.heat_index;
                 document.getElementById('infoBox').innerHTML = `
-                    <b>Sıcaklık:</b> <span class="${temp >= 40 ? 'risk-high' : ''}">${temp.toFixed(1)}°C</span> | 
-                    <b>Aralık:</b> ${getRangeLabel(temp)} | 
+                    <b>Sıcaklık:</b> ${temp.toFixed(1)}°C | 
+                    <b>Hissedilen:</b> <span class="${heatIndex >= 40 ? 'risk-high' : ''}">${heatIndex.toFixed(1)}°C</span> | 
                     <b>Nem:</b> ${point.humidity.toFixed(1)}%
-                    ${temp >= 50 ? ' | <span class="risk-high">⚠️ TEHLİKE!</span>' : ''}
+                    ${heatIndex >= 50 ? ' | <span class="risk-high">⚠️ TEHLİKE!</span>' : ''}
                 `;
             }
         });
