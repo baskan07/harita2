@@ -12,7 +12,7 @@ conn = psycopg2.connect(
     user="sensor_data_db_1mjp_user",
     password="OKPCNZaDSyCp9tyyzOiEipYsjyQTb8NW"
 )
-cursor = db.cursor()
+cursor = conn.cursor()
 
 # Hissedilen sıcaklığı hesaplayan fonksiyon
 def calculate_heat_index(T, RH):
