@@ -73,6 +73,14 @@
         .marker-cluster-high-risk {
             background-color: rgba(255, 51, 51, 0.6);
         }
+        .pulse-effect {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255,0,0,0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255,0,0,0); }
+            100% { box-shadow: 0 0 0 0 rgba(255,0,0,0); }
+        }
     </style>
 </head>
 <body>
@@ -164,8 +172,9 @@
         function createGridLayer() {
             if (gridLayer) map.removeLayer(gridLayer);
             
-            const gridSize = map.getZoom() < 10 ? 0.2 : 0.05; // Zoom seviyesine göre hücre boyutu
+            const gridSize = map.getZoom() < 12 ? 0.05 : 0.02; // Daha yakın zoom seviyelerinde kareleşme
             const gridData = {};
+            let hasHighRiskCells = false;
             
             // Verileri ızgara hücrelerine grupla
             sensorData.forEach(point => {
@@ -178,12 +187,16 @@
                         lat: lat + gridSize/2,
                         lng: lng + gridSize/2,
                         points: [],
-                        sumTemp: 0
+                        sumTemp: 0,
+                        maxTemp: -Infinity
                     };
                 }
                 
                 gridData[key].points.push(point);
                 gridData[key].sumTemp += point.heat_index;
+                if (point.heat_index > gridData[key].maxTemp) {
+                    gridData[key].maxTemp = point.heat_index;
+                }
             });
             
             // Izgara katmanını oluştur
@@ -193,25 +206,47 @@
                 const avgTemp = cell.sumTemp / cell.points.length;
                 const color = getColorForTemperature(avgTemp);
                 
+                // Hücre stilleri - yüksek riskli hücreler için özel stil
+                const isHighRisk = cell.maxTemp >= 50;
+                if (isHighRisk) hasHighRiskCells = true;
+                
+                const cellStyle = {
+                    color: isHighRisk ? '#ff0000' : '#fff',
+                    weight: isHighRisk ? 2 : 0.5,
+                    fillColor: color,
+                    fillOpacity: 0.7,
+                    className: isHighRisk ? 'grid-cell pulse-effect' : 'grid-cell'
+                };
+                
                 const cellMarker = L.rectangle([
                     [cell.lat - gridSize/2, cell.lng - gridSize/2],
                     [cell.lat + gridSize/2, cell.lng + gridSize/2]
-                ], {
-                    color: '#fff',
-                    weight: 0.5,
-                    fillColor: color,
-                    fillOpacity: 0.7,
-                    className: 'grid-cell'
-                }).addTo(gridLayer);
+                ], cellStyle).addTo(gridLayer);
                 
                 // Hücreye tıklandığında detayları göster
-                cellMarker.bindPopup(`
-                    <b>Bölge Ortalaması:</b> ${avgTemp.toFixed(1)}°C<br>
-                    <b>Sıcaklık Aralığı:</b> ${getRangeLabel(avgTemp)}<br>
-                    <b>Nokta Sayısı:</b> ${cell.points.length}<br>
-                    <small>Yakınlaştıkça daha fazla detay görüntülenir</small>
-                `);
+                let popupContent = `
+                    <div style="min-width:220px">
+                        <b>Ortalama Sıcaklık:</b> ${avgTemp.toFixed(1)}°C<br>
+                        <b>Maksimum Sıcaklık:</b> <span class="${cell.maxTemp >= 40 ? 'risk-high' : ''}">${cell.maxTemp.toFixed(1)}°C</span><br>
+                        <b>Sıcaklık Aralığı:</b> ${getRangeLabel(avgTemp)}<br>
+                        <b>Nokta Sayısı:</b> ${cell.points.length}
+                `;
+                
+                if (isHighRisk) {
+                    popupContent += `<br><span class="risk-high">⚠️ TEHLİKELİ SICAKLIK UYARISI!</span>`;
+                }
+                
+                popupContent += `</div>`;
+                cellMarker.bindPopup(popupContent);
             });
+            
+            // Yüksek riskli hücreler varsa uyarı göster
+            if (hasHighRiskCells) {
+                document.getElementById('infoBox').innerHTML = 
+                    '<span class="risk-high">⚠️ TEHLİKELİ SICAKLIK BÖLGELERİ TESPİT EDİLDİ! - Haritada kırmızı ile işaretlenmiş alanlarda 50°C üzeri sıcaklık ölçümleri bulunmaktadır.</span>';
+            } else {
+                document.getElementById('infoBox').innerHTML = 'Haritayı inceleyin - Yakınlaştıkça daha fazla detay görüntülenir';
+            }
             
             gridLayer.addTo(map);
         }
@@ -240,6 +275,7 @@
                         <b>Sıcaklık:</b> <span class="${temp >= 40 ? 'risk-high' : ''}">${temp.toFixed(1)}°C</span><br>
                         <b>Nem:</b> ${point.humidity.toFixed(1)}%<br>
                         <b>Ölçüm Zamanı:</b> ${point.timestamp || 'Bilinmiyor'}
+                        ${temp >= 50 ? '<br><span class="risk-high">⚠️ TEHLİKELİ SICAKLIK!</span>' : ''}
                     </div>
                 `);
                 
@@ -251,7 +287,7 @@
 
         // Zoom seviyesine göre görüntüleme modunu ayarla
         function updateViewBasedOnZoom() {
-            if (map.getZoom() < 10) {
+            if (map.getZoom() < 12) {
                 if (markerCluster) map.removeLayer(markerCluster);
                 createGridLayer();
             } else {
@@ -302,6 +338,7 @@
                     <b>Sıcaklık:</b> <span class="${temp >= 40 ? 'risk-high' : ''}">${temp.toFixed(1)}°C</span> | 
                     <b>Aralık:</b> ${getRangeLabel(temp)} | 
                     <b>Nem:</b> ${point.humidity.toFixed(1)}%
+                    ${temp >= 50 ? ' | <span class="risk-high">⚠️ TEHLİKE!</span>' : ''}
                 `;
             }
         });
@@ -322,7 +359,8 @@
             });
             
             html += '<hr style="margin:8px 0;border-color:#555">';
-            html += '<small>Yakınlaştıkça bireysel noktalar görünür</small>';
+            html += '<small>Yakınlaştıkça bireysel noktalar görünür</small><br>';
+            html += '<i style="background:#ff0000"></i> 50°C+ Tehlikeli Bölge';
             
             div.innerHTML = html;
             return div;
