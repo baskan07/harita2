@@ -42,38 +42,27 @@
         let sensorData = [];
         let heatLayer = null;
 
-        function normalizeHeatData(data) {
-            const minHI = Math.min(...data.map(p => p.heat_index));
-            const maxHI = Math.max(...data.map(p => p.heat_index));
-
-            return data.map(p => [
-                p.latitude,
-                p.longitude,
-                (p.heat_index - minHI) / (maxHI - minHI + 0.01)
-            ]);
-        }
-
         function drawHeatLayer() {
-    const zoom = map.getZoom();
-    const radius = zoom * 3.2;  // radius artırıldı
-    const maxIntensity = 1.0;   // yoğunluğu sınıra kadar çekiyoruz
+            const zoom = map.getZoom();
+            const radius = zoom * 3.2;
 
-    if (heatLayer) {
-        map.removeLayer(heatLayer);
-    }
+            if (heatLayer) {
+                map.removeLayer(heatLayer);
+            }
 
-    heatLayer = L.heatLayer(heatData, {
-        radius: radius,
-        blur: 15,              // daha keskin kenarlar için azaltıldı
-        maxZoom: 18,
-        gradient: {
-            0.0: 'blue',
-            0.4: 'lime',
-            0.7: 'orange',
-            1.0: 'red'
+            heatLayer = L.heatLayer(heatData, {
+                radius: radius,
+                blur: 15,
+                maxZoom: 18,
+                gradient: {
+                    0.0: 'blue',
+                    0.3: 'lime',
+                    0.6: 'yellow',
+                    0.8: 'orange',
+                    1.0: 'red'
+                }
+            }).addTo(map);
         }
-    }).addTo(map);
-}
 
         function getNearestTemperature(lat, lon) {
             let minDist = Infinity;
@@ -94,12 +83,16 @@
         .then(response => response.json())
         .then(data => {
             sensorData = data;
-            heatData = normalizeHeatData(data);
+            heatData = data.map(p => [
+                p.latitude,
+                p.longitude,
+                Math.min(p.heat_index, 150) / 150  // sabit normalize, 150°C üstü bile kırmızı olur
+            ]);
             drawHeatLayer();
         });
 
         map.on('zoomend', function() {
-            drawHeatLayer(); // Zoom değişince heatmap'i yeniden çiz
+            drawHeatLayer();
         });
 
         map.on('mousemove', function(e) {
