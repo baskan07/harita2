@@ -4,21 +4,53 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Veri Ekle</title>
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin: 50px; }
-        form { display: inline-block; text-align: left; }
-        input { display: block; width: 300px; padding: 10px; margin: 10px 0; }
-        button { padding: 10px 20px; background: green; color: white; border: none; cursor: pointer; }
-        #map { height: 400px; width: 80%; margin: auto; }
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 50px;
+        }
+        form {
+            display: inline-block;
+            text-align: left;
+            margin-top: 20px;
+        }
+        input {
+            display: block;
+            width: 300px;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        input[readonly] {
+            background-color: #f1f1f1;
+            color: #333;
+        }
+        button {
+            padding: 10px 20px;
+            background: green;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        #map {
+            height: 400px;
+            width: 80%;
+            margin: auto;
+            border: 2px solid #ccc;
+            border-radius: 6px;
+        }
         .flash-success { color: green; }
         .flash-danger { color: red; }
     </style>
 </head>
 <body>
 
-    <h2>Veri Ekle</h2>
+    <h2>Yeni Sensör Verisi Ekle</h2>
 
     {% with messages = get_flashed_messages(with_categories=True) %}
         {% if messages %}
@@ -28,52 +60,44 @@
         {% endif %}
     {% endwith %}
 
-    <div id="map"></div> <!-- Harita Burada -->
+    <div id="map"></div>
 
     <form action="/veri" method="post">
         <label>Enlem (Latitude):</label>
-        <input type="text" id="latitude" name="latitude" required readonly>
+        <input type="text" id="latitude" name="latitude" readonly required>
 
         <label>Boylam (Longitude):</label>
-        <input type="text" id="longitude" name="longitude" required readonly>
+        <input type="text" id="longitude" name="longitude" readonly required>
 
         <label>Sıcaklık (°C):</label>
-        <input type="text" name="temperature" required>
+        <input type="number" name="temperature" required min="-50" max="60" step="0.1">
 
         <label>Nem (%):</label>
-        <input type="text" name="humidity" required>
+        <input type="number" name="humidity" required min="0" max="100" step="0.1">
 
         <button type="submit">Veriyi Kaydet</button>
     </form>
 
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
-        // Haritayı oluştur
-        var map = L.map('map').setView([36.8841, 30.7056], 12); // Antalya Ormanı merkez alındı
-
-        // OpenStreetMap katmanını ekle
+        var map = L.map('map').setView([36.89, 30.70], 12); // Antalya merkez
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        var marker; // Haritada işaretçi (marker) tanımlanacak
+        var marker;
 
-        // Haritaya tıklanınca çalışacak fonksiyon
         map.on('click', function(e) {
-            var lat = e.latlng.lat.toFixed(6);  // Enlem
-            var lon = e.latlng.lng.toFixed(6);  // Boylam
+            var lat = e.latlng.lat.toFixed(6);
+            var lon = e.latlng.lng.toFixed(6);
 
-            // Form alanlarına koordinatları otomatik yaz
             document.getElementById('latitude').value = lat;
             document.getElementById('longitude').value = lon;
 
-            // Daha önce bir marker eklenmişse kaldır
             if (marker) {
                 map.removeLayer(marker);
             }
 
-            // Yeni tıklanan yere işaretçi ekle
             marker = L.marker([lat, lon]).addTo(map)
                 .bindPopup("Seçilen Nokta<br>Latitude: " + lat + "<br>Longitude: " + lon)
                 .openPopup();
