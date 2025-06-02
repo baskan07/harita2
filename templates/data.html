@@ -67,8 +67,7 @@
 
         function drawMarkers() {
             sensorData.forEach(p => {
-                const temp = p.heat_index;
-                const color = getColorFromTemperature(temp);
+                const color = getColorFromTemperature(p.heat_index);
 
                 const marker = L.circleMarker([p.latitude, p.longitude], {
                     radius: 10,
