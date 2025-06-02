@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Sıcaklık ve Nem Haritası</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
     <style>
@@ -21,7 +21,6 @@
             border-radius: 8px;
             margin-top: 10px;
         }
-
         .legend {
             position: absolute;
             bottom: 30px;
@@ -33,7 +32,6 @@
             font-size: 12px;
             box-shadow: 0 0 10px rgba(0,0,0,0.3);
         }
-
         .legend i {
             width: 18px;
             height: 18px;
@@ -45,7 +43,7 @@
 </head>
 <body>
     <h1>Sıcaklık ve Nem Haritası</h1>
-    
+
     <div id="map"></div>
     <div class="info-box" id="infoBox">Mouse'u harita üzerinde gezdirin...</div>
 
@@ -87,14 +85,12 @@
             if (heatLayer) {
                 map.removeLayer(heatLayer);
             }
-
             heatLayer = L.heatLayer(heatData, calculateHeatLayerOptions()).addTo(map);
         }
 
         function getNearestTemperature(lat, lon) {
             let minDist = Infinity;
             let nearestTemp = null;
-
             sensorData.forEach(point => {
                 let dist = Math.sqrt(Math.pow(lat - point.latitude, 2) + Math.pow(lon - point.longitude, 2));
                 if (dist < minDist) {
@@ -102,7 +98,6 @@
                     nearestTemp = point.heat_index;
                 }
             });
-
             return nearestTemp;
         }
 
@@ -110,13 +105,11 @@
             .then(response => response.json())
             .then(data => {
                 sensorData = data;
-
                 heatData = data.map(p => [
                     p.latitude,
                     p.longitude,
                     Math.min(p.heat_index, 100) / 100
                 ]);
-
                 drawHeatLayer();
 
                 data.forEach(p => {
@@ -128,22 +121,24 @@
                         fillOpacity: 0.0  // görünmez ama etkileşimli
                     }).addTo(map);
 
-                    marker.bindPopup(
+                    // Burada template literal kullandık, backtick lazım!
+                    marker.bindPopup(`
                         <b>Hissedilen Sıcaklık:</b> ${p.heat_index}°C<br>
-                         <b>Nem:</b> ${p.humidity}%<br>
-                         <b>Gerçek Sıcaklık:</b> ${p.temperature}°C
-                    );
+                        <b>Nem:</b> ${p.humidity}%<br>
+                        <b>Gerçek Sıcaklık:</b> ${p.temperature}°C
+                    `);
                 });
             });
 
-        map.on('zoomend', function() {
+        map.on('zoomend', () => {
             drawHeatLayer();
         });
 
-        map.on('mousemove', function(e) {
+        map.on('mousemove', (e) => {
             let nearestTemp = getNearestTemperature(e.latlng.lat, e.latlng.lng);
             if (nearestTemp !== null) {
-                document.getElementById('infoBox').innerText = Hissedilen Sıcaklık: ${nearestTemp}°C;
+                // Burada da backtick ile string oluşturalım
+                document.getElementById('infoBox').innerText = `Hissedilen Sıcaklık: ${nearestTemp}°C`;
             }
         });
 
@@ -156,9 +151,8 @@
 
             for (let i = 0; i < grades.length; i++) {
                 div.innerHTML +=
-                    <i style="background:${colors[i]}"></i> ${grades[i]}${grades[i + 1] ? '&ndash;' + grades[i + 1] : '+'}°C<br>;
+                    `<i style="background:${colors[i]}"></i> ${grades[i]}${grades[i + 1] ? '&ndash;' + grades[i + 1] : '+'}°C<br>`;
             }
-
             return div;
         };
         legend.addTo(map);
