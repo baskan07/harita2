@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Yangın Risk Haritası</title>
+    <title>Sıcaklık Dağılım Haritası</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.vectorgrid@latest/dist/Leaflet.VectorGrid.bundled.js" />
 
     <style>
         #map { height: 600px; }
@@ -13,32 +14,32 @@
             position: relative;
             width: 100%;
             text-align: center;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.8);
             color: white;
             padding: 12px 20px;
             font-size: 20px;
             font-weight: bold;
             border-radius: 8px;
             margin-top: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            box-shadow: 0 2px 15px rgba(0,0,0,0.6);
         }
         .legend {
             position: absolute;
             bottom: 30px;
             left: 20px;
-            padding: 12px;
+            padding: 12px 15px;
             background: rgba(0, 0, 0, 0.85);
             border-radius: 8px;
             line-height: 1.5;
             font-size: 14px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.4);
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
             color: white;
             z-index: 1000;
-            border: 1px solid #555;
+            border: 1px solid #666;
         }
         .legend i {
-            width: 20px;
-            height: 20px;
+            width: 22px;
+            height: 22px;
             float: left;
             margin-right: 10px;
             opacity: 0.9;
@@ -46,99 +47,114 @@
             border: 1px solid rgba(255,255,255,0.3);
         }
         .risk-high {
-            color: #ff4d4d;
+            color: #ff3333;
             font-weight: bold;
+            text-shadow: 0 0 3px rgba(255,0,0,0.5);
+        }
+        .temperature-marker {
+            border-radius: 50%;
+            text-align: center;
+            font-weight: bold;
+            font-size: 12px;
+            line-height: 24px;
         }
     </style>
 </head>
 <body>
-    <h1>Yangın Risk Haritası (Hissedilen Sıcaklık)</h1>
+    <h1>Sıcaklık Dağılım Haritası</h1>
 
     <div id="map"></div>
-    <div class="info-box" id="infoBox">Harita üzerinde gezerek yangın risk seviyesini görün...</div>
+    <div class="info-box" id="infoBox">Harita üzerinde gezerek sıcaklık değerlerini görün...</div>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+    <script src="https://unpkg.com/leaflet.vectorgrid@latest/dist/Leaflet.VectorGrid.bundled.js"></script>
 
     <script>
-        // Yangın riski için sıcaklık eşikleri
-        const RISK_THRESHOLDS = {
-            LOW: 30,      // Düşük risk
-            MEDIUM: 40,   // Orta risk
-            HIGH: 50,     // Yüksek risk
-            EXTREME: 60   // Aşırı yüksek risk
-        };
+        // Sıcaklık aralıkları ve renkler
+        const TEMP_RANGES = [
+            { min: -20, max: 0, color: '#1a237e', label: '-20 - 0°C' },
+            { min: 0, max: 10, color: '#1976d2', label: '0 - 10°C' },
+            { min: 10, max: 20, color: '#00bcd4', label: '10 - 20°C' },
+            { min: 20, max: 30, color: '#4caf50', label: '20 - 30°C' },
+            { min: 30, max: 40, color: '#ffeb3b', label: '30 - 40°C' },
+            { min: 40, max: 50, color: '#ff9800', label: '40 - 50°C' },
+            { min: 50, max: 60, color: '#ff5722', label: '50 - 60°C' },
+            { min: 60, max: 200, color: '#c62828', label: '60°C+'}
+        ];
 
         const map = L.map('map').setView([36.8, 30.7], 11);
         L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
             attribution: '© Google'
         }).addTo(map);
 
-        let heatData = [];
         let sensorData = [];
-        let heatLayer = null;
+        let markers = [];
 
-        // Yangın riskine göre renk skalası
+        // Sıcaklığa göre renk bulma
         function getColorForTemperature(temp) {
-            if (temp < RISK_THRESHOLDS.LOW) return '#2c7bb6';      // Mavi - Düşük risk
-            if (temp < RISK_THRESHOLDS.MEDIUM) return '#ffff00';   // Sarı - Dikkat
-            if (temp < RISK_THRESHOLDS.HIGH) return '#ff9900';    // Turuncu - Orta risk
-            if (temp < RISK_THRESHOLDS.EXTREME) return '#ff0000'; // Kırmızı - Yüksek risk
-            return '#990000';                                     // Koyu kırmızı - Aşırı risk
+            for (let range of TEMP_RANGES) {
+                if (temp >= range.min && temp < range.max) {
+                    return range.color;
+                }
+            }
+            return TEMP_RANGES[TEMP_RANGES.length-1].color; // Son aralık
         }
 
-        // Heatmap için özel render fonksiyonu (yoğunluğa değil, sıcaklığa göre renk)
-        function createTemperatureHeatmap() {
-            if (heatLayer) {
-                map.removeLayer(heatLayer);
+        // Sıcaklık aralığı etiketi bulma
+        function getRangeLabel(temp) {
+            for (let range of TEMP_RANGES) {
+                if (temp >= range.min && temp < range.max) {
+                    return range.label;
+                }
             }
+            return TEMP_RANGES[TEMP_RANGES.length-1].label;
+        }
 
-            // Her nokta için ayrı heatmap katmanı oluştur
+        // Haritayı temizleme
+        function clearMap() {
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+        }
+
+        // Haritayı sıcaklık verileriyle güncelleme
+        function updateMapWithTemperatureData() {
+            clearMap();
+            
             sensorData.forEach(point => {
                 const temp = point.heat_index;
-                const intensity = Math.min(temp / RISK_THRESHOLDS.EXTREME, 1); // 0-1 arası normalize
+                const color = getColorForTemperature(temp);
                 
-                L.circleMarker([point.latitude, point.longitude], {
-                    radius: 8,
-                    fillColor: getColorForTemperature(temp),
+                // Daire şeklinde marker oluştur
+                const marker = L.circleMarker([point.latitude, point.longitude], {
+                    radius: 10,
+                    fillColor: color,
                     color: '#fff',
                     weight: 1,
                     opacity: 1,
                     fillOpacity: 0.8
-                }).addTo(map).bindPopup(`
-                    <b>Yangın Riski:</b> <span class="${temp >= RISK_THRESHOLDS.HIGH ? 'risk-high' : ''}">
-                        ${getRiskLevel(temp)}
-                    </span><br>
-                    <b>Hissedilen Sıcaklık:</b> ${temp.toFixed(1)}°C<br>
-                    <b>Gerçek Sıcaklık:</b> ${point.temperature.toFixed(1)}°C<br>
-                    <b>Nem:</b> ${point.humidity.toFixed(1)}%
+                }).addTo(map);
+                
+                // Marker'a tıklanabilirlik ve bilgi ekle
+                marker.bindPopup(`
+                    <div style="min-width:200px">
+                        <b>Konum:</b> ${point.latitude.toFixed(4)}, ${point.longitude.toFixed(4)}<br>
+                        <b>Sıcaklık Aralığı:</b> ${getRangeLabel(temp)}<br>
+                        <b>Hissedilen Sıcaklık:</b> <span class="${temp >= 40 ? 'risk-high' : ''}">${temp.toFixed(1)}°C</span><br>
+                        <b>Gerçek Sıcaklık:</b> ${point.temperature.toFixed(1)}°C<br>
+                        <b>Nem:</b> ${point.humidity.toFixed(1)}%
+                    </div>
                 `);
+                
+                markers.push(marker);
             });
-
-            // Heatmap katmanını özelleştirilmiş renklerle oluştur
-            heatLayer = L.heatLayer(heatData, {
-                radius: 25,
-                blur: 15,
-                maxZoom: 18,
-                minOpacity: 0.5,
-                max: RISK_THRESHOLDS.EXTREME,
-                gradient: {
-                    0.0: '#2c7bb6',   // <30°C
-                    0.3: '#ffff00',   // ~30°C
-                    0.5: '#ff9900',   // ~40°C
-                    0.7: '#ff0000',  // ~50°C
-                    1.0: '#990000'    // >60°C
-                }
-            }).addTo(map);
-        }
-
-        // Sıcaklığa göre risk seviyesi metni
-        function getRiskLevel(temp) {
-            if (temp < RISK_THRESHOLDS.LOW) return "Düşük";
-            if (temp < RISK_THRESHOLDS.MEDIUM) return "Orta-Düşük";
-            if (temp < RISK_THRESHOLDS.HIGH) return "Orta-Yüksek";
-            if (temp < RISK_THRESHOLDS.EXTREME) return "Yüksek";
-            return "Aşırı Yüksek";
+            
+            // Marker kümeleme (çok sayıda nokta varsa)
+            if (markers.length > 50) {
+                const markerCluster = L.markerClusterGroup();
+                markers.forEach(marker => markerCluster.addLayer(marker));
+                map.addLayer(markerCluster);
+            }
         }
 
         // En yakın noktayı bulma
@@ -166,12 +182,7 @@
             .then(response => response.json())
             .then(data => {
                 sensorData = data;
-                
-                // Heatmap verisini oluştur (latitude, longitude, heat_index)
-                heatData = data.map(p => [p.latitude, p.longitude, p.heat_index]);
-                
-                // Özelleştirilmiş heatmap'i oluştur
-                createTemperatureHeatmap();
+                updateMapWithTemperatureData();
             })
             .catch(error => {
                 console.error('Veri yüklenirken hata:', error);
@@ -184,12 +195,9 @@
             const point = getNearestPoint(e.latlng.lat, e.latlng.lng);
             if (point) {
                 const temp = point.heat_index;
-                const riskLevel = getRiskLevel(temp);
-                const riskClass = temp >= RISK_THRESHOLDS.HIGH ? 'risk-high' : '';
-                
                 document.getElementById('infoBox').innerHTML = `
-                    <b>Yangın Riski:</b> <span class="${riskClass}">${riskLevel}</span> | 
-                    <b>Sıcaklık:</b> ${temp.toFixed(1)}°C | 
+                    <b>Sıcaklık:</b> <span class="${temp >= 40 ? 'risk-high' : ''}">${temp.toFixed(1)}°C</span> | 
+                    <b>Aralık:</b> ${getRangeLabel(temp)} | 
                     <b>Nem:</b> ${point.humidity.toFixed(1)}%
                 `;
             }
@@ -199,16 +207,15 @@
         const legend = L.control({position: 'bottomleft'});
         legend.onAdd = function() {
             const div = L.DomUtil.create('div', 'legend');
-            div.innerHTML = `
-                <h4>Yangın Risk Seviyeleri</h4>
-                <i style="background:#2c7bb6"></i> <30°C (Düşük)<br>
-                <i style="background:#ffff00"></i> 30-39°C (Orta-Düşük)<br>
-                <i style="background:#ff9900"></i> 40-49°C (Orta-Yüksek)<br>
-                <i style="background:#ff0000"></i> 50-59°C (Yüksek)<br>
-                <i style="background:#990000"></i> 60°C+ (Aşırı Yüksek)<br>
-                <hr style="margin:8px 0;border-color:#555">
-                <small>Hissedilen sıcaklık değerlerine göre</small>
-            `;
+            let html = '<h4>Sıcaklık Dağılımı (°C)</h4>';
+            
+            TEMP_RANGES.forEach(range => {
+                html += `
+                    <i style="background:${range.color}"></i> ${range.label}<br>
+                `;
+            });
+            
+            div.innerHTML = html;
             return div;
         };
         legend.addTo(map);
