@@ -172,7 +172,7 @@
         function createGridLayer() {
             if (gridLayer) map.removeLayer(gridLayer);
             
-            const gridSize = map.getZoom() < 12 ? 0.05 : 0.02; // Daha yakın zoom seviyelerinde kareleşme
+            const gridSize = map.getZoom() < 11 ? 0.05 : 0.02; // Daha yakın zoom seviyelerinde kareleşme
             const gridData = {};
             let hasHighRiskCells = false;
             
