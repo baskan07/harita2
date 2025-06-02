@@ -121,12 +121,11 @@
                         fillOpacity: 0.0  // görünmez ama etkileşimli
                     }).addTo(map);
 
-                    // Burada template literal kullandık, backtick lazım!
-                    marker.bindPopup(
+                    marker.bindPopup(`
                         <b>Hissedilen Sıcaklık:</b> ${p.heat_index}°C<br>
                         <b>Nem:</b> ${p.humidity}%<br>
                         <b>Gerçek Sıcaklık:</b> ${p.temperature}°C
-                    );
+                    `);
                 });
             });
 
@@ -137,8 +136,7 @@
         map.on('mousemove', (e) => {
             let nearestTemp = getNearestTemperature(e.latlng.lat, e.latlng.lng);
             if (nearestTemp !== null) {
-                // Burada da backtick ile string oluşturalım
-                document.getElementById('infoBox').innerText = Hissedilen Sıcaklık: ${nearestTemp}°C;
+                document.getElementById('infoBox').innerText = `Hissedilen Sıcaklık: ${nearestTemp}°C`;
             }
         });
 
@@ -150,8 +148,7 @@
             const colors = ['#2c7bb6','#abd9e9','#ffffbf','#fdae61','#d7191c'];
 
             for (let i = 0; i < grades.length; i++) {
-                div.innerHTML +=
-                    <i style="background:${colors[i]}"></i> ${grades[i]}${grades[i + 1] ? '&ndash;' + grades[i + 1] : '+'}°C<br>;
+                div.innerHTML += `<i style="background:${colors[i]}"></i> ${grades[i]}${grades[i + 1] ? '&ndash;' + grades[i + 1] : '+'}°C<br>`;
             }
             return div;
         };
