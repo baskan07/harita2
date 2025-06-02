@@ -86,10 +86,31 @@
             if (heatLayer) {
                 map.removeLayer(heatLayer);
             }
-
-            const maxHeat = Math.max(...sensorData.map(p => p.heat_index));
-            heatLayer = L.heatLayer(heatData, calculateHeatLayerOptions(maxHeat)).addTo(map);
+        
+            const heatValues = sensorData.map(p => p.heat_index);
+            const minHeat = Math.min(...heatValues);
+            const maxHeat = Math.max(...heatValues);
+        
+            // Normalized gradient oluştur
+            const gradient = {};
+            const colors = ['#2c7bb6', '#abd9e9', '#ffffbf', '#fdae61', '#d7191c'];
+            const steps = colors.length;
+            for (let i = 0; i < steps; i++) {
+                const t = i / (steps - 1); // normalize (0.0–1.0)
+                gradient[t] = colors[i];
+            }
+        
+            // Heat layer oluştur
+            heatLayer = L.heatLayer(heatData, {
+                radius: map.getZoom() * 3.5,
+                blur: map.getZoom() >= 13 ? 10 : 18,
+                maxZoom: 18,
+                minOpacity: 0.35,
+                max: maxHeat, // raw heat değeri
+                gradient: gradient
+            }).addTo(map);
         }
+
 
         function getNearestTemperature(lat, lon) {
             let minDist = Infinity;
