@@ -6,7 +6,6 @@
     <title>Sıcaklık ve Nem Haritası</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-
     <style>
         #map { height: 600px; }
         .info-box {
@@ -62,7 +61,7 @@
         let sensorData = [];
         let heatLayer = null;
 
-        function calculateHeatLayerOptions() {
+        function calculateHeatLayerOptions(maxHeat) {
             const zoom = map.getZoom();
             const radius = zoom * 3.5;
             const blur = zoom >= 13 ? 10 : 18;
@@ -72,13 +71,13 @@
                 blur: blur,
                 maxZoom: 18,
                 minOpacity: 0.35,
-                max: 1.0,
+                max: maxHeat,
                 gradient: {
-                    0.0: '#2c7bb6',
-                    0.25: '#abd9e9',
-                    0.5: '#ffffbf',
-                    0.75: '#fdae61',
-                    1.0: '#d7191c'
+                    30: '#2c7bb6',
+                    35: '#abd9e9',
+                    40: '#ffffbf',
+                    45: '#fdae61',
+                    50: '#d7191c'
                 }
             };
         }
@@ -88,7 +87,8 @@
                 map.removeLayer(heatLayer);
             }
 
-            heatLayer = L.heatLayer(heatData, calculateHeatLayerOptions()).addTo(map);
+            const maxHeat = Math.max(...sensorData.map(p => p.heat_index));
+            heatLayer = L.heatLayer(heatData, calculateHeatLayerOptions(maxHeat)).addTo(map);
         }
 
         function getNearestTemperature(lat, lon) {
@@ -114,7 +114,7 @@
                 heatData = data.map(p => [
                     p.latitude,
                     p.longitude,
-                    Math.min(p.heat_index, 100) / 100
+                    p.heat_index
                 ]);
 
                 drawHeatLayer();
@@ -125,7 +125,7 @@
                         color: 'white',
                         weight: 1,
                         fillColor: 'black',
-                        fillOpacity: 0.0  // görünmez ama etkileşimli
+                        fillOpacity: 0.0
                     }).addTo(map);
 
                     marker.bindPopup(
@@ -147,11 +147,10 @@
             }
         });
 
-        // Legend
         const legend = L.control({position: 'bottomleft'});
         legend.onAdd = function(map) {
             const div = L.DomUtil.create('div', 'legend');
-            const grades = [0, 25, 50, 75, 100];
+            const grades = [30, 35, 40, 45, 50];
             const colors = ['#2c7bb6','#abd9e9','#ffffbf','#fdae61','#d7191c'];
 
             for (let i = 0; i < grades.length; i++) {
