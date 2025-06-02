@@ -2,110 +2,65 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Sıcaklık ve Nem Haritası (Interpolasyonlu)</title>
+<title>Dinamik Sıcaklık Haritası</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 <style>
-    #map { height: 600px; }
-    .info-box {
-        width: 100%;
-        text-align: center;
-        background: rgba(0, 0, 0, 0.6);
-        color: white;
-        padding: 10px 20px;
-        font-size: 20px;
-        font-weight: bold;
-        border-radius: 8px;
-        margin-top: 10px;
-    }
-    .legend {
-        position: absolute;
-        bottom: 30px;
-        left: 20px;
-        padding: 10px;
-        background: rgba(0, 0, 0, 0.85);
-        border-radius: 5px;
-        line-height: 1.4;
-        font-size: 12px;
-        box-shadow: 0 0 10px rgba(0,0,0,0.3);
-    }
-    .legend i {
-        width: 18px;
-        height: 18px;
-        float: left;
-        margin-right: 8px;
-        opacity: 0.8;
-    }
+  #map { height: 600px; }
+  .legend {
+    position: absolute;
+    bottom: 30px;
+    left: 20px;
+    padding: 10px;
+    background: rgba(0,0,0,0.85);
+    border-radius: 5px;
+    line-height: 1.4;
+    font-size: 12px;
+    color: white;
+    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+  }
+  .legend i {
+    width: 18px;
+    height: 18px;
+    float: left;
+    margin-right: 8px;
+    opacity: 0.9;
+  }
 </style>
 </head>
 <body>
-<h1>Sıcaklık ve Nem Haritası (Gerçek Isı Dağılımı)</h1>
+<h1>Dinamik Sıcaklık Haritası</h1>
 <div id="map"></div>
-<div class="info-box" id="infoBox">Mouse'u harita üzerinde gezdirin...</div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
 <script>
   const map = L.map('map').setView([36.8, 30.7], 11);
-  L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-      attribution: '© Google'
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
   }).addTo(map);
 
-  let sensorData = [];
-
-  function getNearestTemperature(lat, lon) {
-      let minDist = Infinity;
-      let nearestTemp = null;
-      sensorData.forEach(point => {
-          let dist = Math.sqrt(Math.pow(lat - point.latitude, 2) + Math.pow(lon - point.longitude, 2));
-          if (dist < minDist) {
-              minDist = dist;
-              nearestTemp = point.heat_index;
-          }
-      });
-      return nearestTemp;
+  // Sıcaklığa göre renk skalası fonksiyonu
+  function getColor(temp) {
+    return temp > 40 ? '#d7191c' :
+           temp > 35 ? '#fdae61' :
+           temp > 30 ? '#ffffbf' :
+           temp > 25 ? '#a6d96a' :
+                       '#2c7bb6';
   }
 
-  fetch('/data') // Bunu kendi API ya da json dosyanın yoluyla değiştir
-    .then(response => {
-      if (!response.ok) throw new Error('Veri alınamadı');
-      return response.json();
-    })
+  // Veriyi apiLink ile gerçek yerden çekiyoruz
+  const apiLink = 'https://senin-site-api.com/data'; // Bunu kendi API'nle değiştir lan
+
+  fetch(apiLink)
+    .then(res => res.json())
     .then(data => {
-      sensorData = data;
-      if (!Array.isArray(data) || data.length === 0) {
-        alert('Gelen veri boş veya uygun değil.');
-        return;
-      }
-
-      // heat_index min-max aralığını bul
-      const minHeat = Math.min(...data.map(d => d.heat_index));
-      const maxHeat = Math.max(...data.map(d => d.heat_index));
-
-      // heatPoints formatına dönüştür
-      const heatPoints = data.map(d => [
-        d.latitude,
-        d.longitude,
-        (d.heat_index - minHeat) / (maxHeat - minHeat)
-      ]);
-
-      // Isı haritası ekle
-      L.heatLayer(heatPoints, {
-        radius: 25,
-        blur: 15,
-        maxZoom: 17,
-        max: 1
-      }).addTo(map);
-
-      // Markerları ekle
       data.forEach(p => {
         const marker = L.circleMarker([p.latitude, p.longitude], {
-          radius: 6,
-          color: 'white',
+          radius: 10,
+          color: 'black',
           weight: 1,
-          fillColor: 'black',
-          fillOpacity: 0.0
+          fillColor: getColor(p.temperature),
+          fillOpacity: 0.85
         }).addTo(map);
 
         marker.bindPopup(`
@@ -115,30 +70,23 @@
         `);
       });
     })
-    .catch(err => {
-      console.error('Hata:', err);
-      alert('Veri yüklenirken hata oluştu.');
+    .catch(e => {
+      console.error('API verisi çekilirken hata:', e);
+      alert('Veri çekilemedi, manual deneyin lan.');
     });
 
-  map.on('mousemove', (e) => {
-    let nearestTemp = getNearestTemperature(e.latlng.lat, e.latlng.lng);
-    if (nearestTemp !== null) {
-      document.getElementById('infoBox').innerText = `Hissedilen Sıcaklık: ${nearestTemp}°C`;
-    }
-  });
-
-  // Legend
+  // Legend ekleyelim
   const legend = L.control({position: 'bottomleft'});
   legend.onAdd = function(map) {
-      const div = L.DomUtil.create('div', 'legend');
-      const grades = [0, 10, 20, 30, 40, 50];
-      const colors = ['#2c7bb6','#abd9e9','#ffffbf','#fdae61','#d7191c','#a50026'];
+    const div = L.DomUtil.create('div', 'legend');
+    const grades = [0, 25, 30, 35, 40];
+    const labels = ['<25°C', '25-30°C', '30-35°C', '35-40°C', '>40°C'];
+    const colors = ['#2c7bb6','#a6d96a','#ffffbf','#fdae61','#d7191c'];
 
-      for (let i = 0; i < grades.length; i++) {
-          div.innerHTML +=
-              `<i style="background:${colors[i]}"></i> ${grades[i]}${grades[i + 1] ? '&ndash;' + grades[i + 1] : '+'}°C<br>`;
-      }
-      return div;
+    for (let i = 0; i < grades.length; i++) {
+      div.innerHTML += `<i style="background:${colors[i]}"></i> ${labels[i]}<br>`;
+    }
+    return div;
   };
   legend.addTo(map);
 </script>
