@@ -56,77 +56,39 @@
         L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
             attribution: '© Google'
         }).addTo(map);
-
-        let heatData = [];
+    
         let sensorData = [];
-        let heatLayer = null;
         let heat = null;
-
-        function calculateHeatLayerOptions(maxHeat) {
-            const zoom = map.getZoom();
-            const radius = zoom * 3.5;
-            const blur = zoom >= 13 ? 10 : 18;
-
-            return {
-                radius: radius,
-                blur: blur,
-                maxZoom: 18,
-                minOpacity: 0.35,
-                max: maxHeat,
-                gradient: {
-                    30: '#2c7bb6',
-                    35: '#abd9e9',
-                    40: '#ffffbf',
-                    45: '#fdae61',
-                    50: '#d7191c'
-                }
-            };
-        }
-
+    
         function drawHeatLayer(data) {
-    // Temizlik: Mevcut heat layer varsa kaldır
-            if (heat) {
-                map.removeLayer(heat);
-            }
-        
+            if (heat) map.removeLayer(heat);
+    
             if (!data || data.length === 0) {
                 console.error("Veri yok.");
                 return;
             }
-        
-            // Sıcaklık değerlerini çek
+    
             const temps = data.map(p => parseFloat(p.hissedilen_sicaklik)).filter(t => !isNaN(t));
-        
             const minTemp = Math.min(...temps);
             const maxTemp = Math.max(...temps);
-        
-            if (minTemp === maxTemp) {
-                console.warn("Tüm sıcaklıklar aynı, normalize edilemiyor.");
-            }
-        
-            // Normalize et ve heatData'ya aktar
+    
             const heatData = data.map(p => {
                 const lat = parseFloat(p.latitude);
                 const lng = parseFloat(p.longitude);
                 const temp = parseFloat(p.hissedilen_sicaklik);
-        
                 if (isNaN(lat) || isNaN(lng) || isNaN(temp)) return null;
-        
-                const normalized = (temp - minTemp) / (maxTemp - minTemp); // 0 ile 1 arası
-        
+                const normalized = (temp - minTemp) / (maxTemp - minTemp);
                 return [lat, lng, normalized];
             }).filter(e => e !== null);
-        
-            // Gradient ayarları (0–1 arasında olmalı yoksa addColorStop hata verir)
+    
             const gradient = {
-                0.0: '#0000FF',   // mavi (soğuk)
-                0.25: '#00FFFF',  // açık mavi
-                0.5: '#FFFF00',   // sarı
-                0.75: '#FFA500',  // turuncu
-                1.0: '#FF0000'    // kırmızı (sıcak)
+                0.0: '#0000FF',
+                0.25: '#00FFFF',
+                0.5: '#FFFF00',
+                0.75: '#FFA500',
+                1.0: '#FF0000'
             };
-        
-            // Heat layer oluştur
+    
             heat = L.heatLayer(heatData, {
                 radius: 25,
                 blur: 15,
@@ -135,12 +97,11 @@
                 minOpacity: 0.5
             }).addTo(map);
         }
-
-
+    
         function getNearestTemperature(lat, lon) {
             let minDist = Infinity;
             let nearestTemp = null;
-
+    
             sensorData.forEach(point => {
                 let dist = Math.sqrt(Math.pow(lat - point.latitude, 2) + Math.pow(lon - point.longitude, 2));
                 if (dist < minDist) {
@@ -148,23 +109,17 @@
                     nearestTemp = point.heat_index;
                 }
             });
-
+    
             return nearestTemp;
         }
-
+    
         fetch('/data')
             .then(response => response.json())
             .then(data => {
                 sensorData = data;
-
-                heatData = data.map(p => [
-                    p.latitude,
-                    p.longitude,
-                    p.heat_index
-                ]);
-
-                drawHeatLayer();
-
+    
+                drawHeatLayer(sensorData); // 🔥 Fix burada
+    
                 data.forEach(p => {
                     const marker = L.circleMarker([p.latitude, p.longitude], {
                         radius: 6,
@@ -173,7 +128,7 @@
                         fillColor: 'black',
                         fillOpacity: 0.0
                     }).addTo(map);
-
+    
                     marker.bindPopup(
                         `<b>Hissedilen Sıcaklık:</b> ${p.heat_index}°C<br>
                          <b>Nem:</b> ${p.humidity}%<br>
@@ -181,29 +136,29 @@
                     );
                 });
             });
-
+    
         map.on('zoomend', function() {
-            drawHeatLayer();
+            drawHeatLayer(sensorData); // 🔥 Fix burada da
         });
-
+    
         map.on('mousemove', function(e) {
             let nearestTemp = getNearestTemperature(e.latlng.lat, e.latlng.lng);
             if (nearestTemp !== null) {
                 document.getElementById('infoBox').innerText = `Hissedilen Sıcaklık: ${nearestTemp}°C`;
             }
         });
-
+    
         const legend = L.control({position: 'bottomleft'});
         legend.onAdd = function(map) {
             const div = L.DomUtil.create('div', 'legend');
             const grades = [30, 35, 40, 45, 50];
             const colors = ['#2c7bb6','#abd9e9','#ffffbf','#fdae61','#d7191c'];
-
+    
             for (let i = 0; i < grades.length; i++) {
                 div.innerHTML +=
                     `<i style="background:${colors[i]}"></i> ${grades[i]}${grades[i + 1] ? '&ndash;' + grades[i + 1] : '+'}°C<br>`;
             }
-
+    
             return div;
         };
         legend.addTo(map);
