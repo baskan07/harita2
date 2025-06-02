@@ -28,20 +28,19 @@ def home():
 
 @app.route('/data', methods=['GET'])
 def get_data():
-    cursor.execute("SELECT latitude, longitude, temperature, humidity, created_at FROM sensor_okuma")
+    cursor.execute("SELECT latitude, longitude, temperature, humidity FROM sensor_okuma")
     data = cursor.fetchall()
     
     result = []
     for row in data:
-        latitude, longitude, temperature, humidity, created_at = row
-        heat_index = calculate_heat_index(temperature, humidity)
+        latitude, longitude, temperature, humidity = row
+        heat_index = calculate_heat_index(temperature, humidity)  # Hissedilen sıcaklık hesaplanıyor
         result.append({
             "latitude": latitude,
             "longitude": longitude,
             "temperature": temperature,
             "humidity": humidity,
-            "heat_index": heat_index,
-            "timestamp": created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else None
+            "heat_index": heat_index  # API'ye eklendi
         })
     
     return jsonify(result)
