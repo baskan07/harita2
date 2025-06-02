@@ -34,25 +34,44 @@
     
     <script>
         var map = L.map('map').setView([36.8, 30.7], 11);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
+        L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            attribution: '© Google'
         }).addTo(map);
 
-        var heatData = [];
-        var sensorData = [];
+        let heatData = [];
+        let sensorData = [];
+        let heatLayer = null;
 
-        fetch('/data')
-        .then(response => response.json())
-        .then(data => {
-            sensorData = data;
-            heatData = data.map(point => [point.latitude, point.longitude, point.heat_index / 50]);
-            L.heatLayer(heatData, { radius: 25, blur: 15, maxZoom: 10 }).addTo(map);
-        });
+        function normalizeHeatData(data) {
+            const minHI = Math.min(...data.map(p => p.heat_index));
+            const maxHI = Math.max(...data.map(p => p.heat_index));
+
+            return data.map(p => [
+                p.latitude,
+                p.longitude,
+                (p.heat_index - minHI) / (maxHI - minHI + 0.01)
+            ]);
+        }
+
+        function drawHeatLayer() {
+            const zoom = map.getZoom();
+            const radius = zoom * 2.5; // Zoom arttıkça daha büyük radius
+
+            if (heatLayer) {
+                map.removeLayer(heatLayer);
+            }
+
+            heatLayer = L.heatLayer(heatData, {
+                radius: radius,
+                blur: 25,
+                maxZoom: 18
+            }).addTo(map);
+        }
 
         function getNearestTemperature(lat, lon) {
             let minDist = Infinity;
             let nearestTemp = null;
-            
+
             sensorData.forEach(point => {
                 let dist = Math.sqrt(Math.pow(lat - point.latitude, 2) + Math.pow(lon - point.longitude, 2));
                 if (dist < minDist) {
@@ -63,6 +82,18 @@
 
             return nearestTemp;
         }
+
+        fetch('/data')
+        .then(response => response.json())
+        .then(data => {
+            sensorData = data;
+            heatData = normalizeHeatData(data);
+            drawHeatLayer();
+        });
+
+        map.on('zoomend', function() {
+            drawHeatLayer(); // Zoom değişince heatmap'i yeniden çiz
+        });
 
         map.on('mousemove', function(e) {
             let nearestTemp = getNearestTemperature(e.latlng.lat, e.latlng.lng);
