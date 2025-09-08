@@ -10,22 +10,6 @@ DB_URL = "postgresql://sensor_user:amLdGfRtXTtpye0zB6kHVBkZvmiQ0fyO@dpg-d2vjqu8d
 def get_conn():
     return psycopg2.connect(DB_URL, sslmode="require")
 
-# --- Tablo yoksa oluştur (uygulama başlarken bir kez) ---
-with get_conn() as c:
-    with c.cursor() as cur:
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS sensor_verileri (
-            id SERIAL PRIMARY KEY,
-            sicaklik FLOAT NOT NULL,
-            nem FLOAT NOT NULL,
-            enlem FLOAT NOT NULL,
-            boylam FLOAT NOT NULL,
-            isi_indeksi FLOAT NOT NULL,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        """)
-        c.commit()
-
 # --- Isı indeksi ---
 def calculate_heat_index(T, RH):
     return (-8.78469475556 + 1.61139411*T + 2.33854883889*RH - 0.14611605*T*RH
