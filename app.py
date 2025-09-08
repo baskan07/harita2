@@ -152,19 +152,24 @@ def sms():
 def data():
     with get_conn() as c:
         with c.cursor() as cur:
-            cur.execute("SELECT sicaklik, nem, enlem, boylam, isi_indeksi, timestamp FROM sensor_verileri")
+            cur.execute("""
+                SELECT sicaklik, nem, enlem, boylam, isi_indeksi, timestamp
+                FROM sensor_verileri
+            """)
             rows = cur.fetchall()
 
+    # Frontend'in beklediği isimlerle dön
     return jsonify([
         {
-            "sicaklik": r[0],
-            "nem": r[1],
-            "enlem": r[2],
-            "boylam": r[3],
-            "isi_indeksi": r[4],
+            "temperature": r[0],
+            "humidity": r[1],
+            "latitude": r[2],
+            "longitude": r[3],
+            "heat_index": r[4],
             "timestamp": r[5].isoformat() if r[5] else None
         } for r in rows
     ])
+
 
 # (İstersen Tasker/Twilio için SMS webhook'u da ekleyebilirim: /sms)
 
