@@ -5,7 +5,7 @@ import math
 app = Flask(__name__)
 
 # Veritabanı bağlantısı
-DB_URL = os.getenv("postgresql://sensor_user:amLdGfRtXTtpye0zB6kHVBkZvmiQ0fyO@dpg-d2vjqu8dl3ps73992d3g-a.frankfurt-postgres.render.com:5432/sensor_data_db_x3lm")
+DB_URL = "postgresql://sensor_user:amLdGfRtXTtpye0zB6kHVBkZvmiQ0fyO@dpg-d2vjqu8dl3ps73992d3g-a.frankfurt-postgres.render.com:5432/sensor_data_db_x3lm"
 
 def get_conn():
     return psycopg2.connect(DB_URL, sslmode="require")
