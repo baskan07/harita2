@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 # Veritabanı bağlantısı
 conn = psycopg2.connect(
-    host="dpg-d2vjqu8d1jps73992d3g-a",
+    host="render psql dpg-d2vjqu8dl3ps73992d3g-a",
     database="sensor_data_db_x3lm",
     user="sensor_user",
     password="amLdGfRtXTtpye0zB6kHVBkZvmi0Qfy0",
