@@ -1,74 +1,79 @@
-from flask import Flask, jsonify, request, redirect, render_template, url_for, flash
+from flask import Flask, render_template, request, jsonify
 import psycopg2
 import math
 
 app = Flask(__name__)
-app.secret_key = "gizli_anahtar"
 
-# PostgreSQL bağlantısı
+# Veritabanı bağlantısı
 conn = psycopg2.connect(
-    host="dpg-d0untvp5pdvs73a276e0-a.frankfurt-postgres.render.com",
-    database="sensor_data_db_1mjp",
-    user="sensor_data_db_1mjp_user",
-    password="OKPCNZaDSyCp9tyyzOiEipYsjyQTb8NW"
+    host="dpg-d2vjqu8d1jps73992d3g-a",
+    database="sensor_data_db_x3lm",
+    user="sensor_user",
+    password="amLdGfRtXTtpye0zB6kHVBkZvmi0Qfy0",
+    port="5432"
 )
 cursor = conn.cursor()
 
-# Hissedilen sıcaklığı hesaplayan fonksiyon
+# 🚀 Tablo yoksa oluştur
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS sensor_verileri (
+    id SERIAL PRIMARY KEY,
+    sicaklik FLOAT,
+    nem FLOAT,
+    enlem FLOAT,
+    boylam FLOAT,
+    isi_indeksi FLOAT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+""")
+conn.commit()
+
+# Isı indeksi hesaplama fonksiyonu
 def calculate_heat_index(T, RH):
-    HI = (-8.78469475556 + 1.61139411 * T + 2.33854883889 * RH
-          - 0.14611605 * T * RH - 0.012308094 * (T ** 2)
-          - 0.0164248277778 * (RH ** 2) + 0.002211732 * (T ** 2) * RH
-          + 0.00072546 * T * (RH ** 2) - 0.000003582 * (T ** 2) * (RH ** 2))
-    return round(HI, 2)
+    return -8.78469475556 + 1.61139411*T + 2.33854883889*RH - 0.14611605*T*RH - 0.012308094*T**2 - 0.0164248277778*RH**2 + 0.002211732*T**2*RH + 0.00072546*T*RH**2 - 0.000003582*T**2*RH**2
 
 @app.route('/')
-def home():
-    return redirect("/harita", code=301)
+def index():
+    return render_template('data.html')
+
+@app.route('/veri_form')
+def veri_form():
+    return render_template('veri_form.html')
+
+@app.route('/veri', methods=['POST'])
+def veri():
+    try:
+        data = request.json
+        sicaklik = float(data.get('sicaklik'))
+        nem = float(data.get('nem'))
+        enlem = float(data.get('enlem'))
+        boylam = float(data.get('boylam'))
+
+        # Isı indeksi hesapla
+        is_index = calculate_heat_index(sicaklik, nem)
+
+        cursor.execute(
+            "INSERT INTO sensor_verileri (sicaklik, nem, enlem, boylam, isi_indeksi) VALUES (%s, %s, %s, %s, %s)",
+            (sicaklik, nem, enlem, boylam, is_index)
+        )
+        conn.commit()
+
+        return jsonify({"status": "success", "message": "Veri eklendi!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
 
 @app.route('/data', methods=['GET'])
-def get_data():
-    cursor.execute("SELECT latitude, longitude, temperature, humidity FROM sensor_okuma")
-    data = cursor.fetchall()
-    
-    result = []
-    for row in data:
-        latitude, longitude, temperature, humidity = row
-        heat_index = calculate_heat_index(temperature, humidity)  # Hissedilen sıcaklık hesaplanıyor
-        result.append({
-            "latitude": latitude,
-            "longitude": longitude,
-            "temperature": temperature,
-            "humidity": humidity,
-            "heat_index": heat_index  # API'ye eklendi
-        })
-    
-    return jsonify(result)
-
-@app.route('/veri', methods=['GET', 'POST'])
-def veri_ekle():
-    if request.method == 'POST':
-        try:
-            latitude = float(request.form['latitude'])
-            longitude = float(request.form['longitude'])
-            temperature = float(request.form['temperature'])
-            humidity = float(request.form['humidity'])
-
-            query = "INSERT INTO sensor_okuma (latitude, longitude, temperature, humidity) VALUES (%s, %s, %s, %s)"
-            cursor.execute(query, (latitude, longitude, temperature, humidity))
-            conn.commit()
-
-            flash("Veri başarıyla eklendi!", "success")
-            return redirect(url_for('veri_ekle'))
-        
-        except Exception as e:
-            flash(f"Hata: {e}", "danger")
-
-    return render_template("veri_form.html")
-
-@app.route("/harita", methods=["GET"])
-def olustur():
-    return render_template("data.html")
+def data():
+    cursor.execute("SELECT sicaklik, nem, enlem, boylam, isi_indeksi, timestamp FROM sensor_verileri")
+    rows = cursor.fetchall()
+    return jsonify([{
+        "sicaklik": row[0],
+        "nem": row[1],
+        "enlem": row[2],
+        "boylam": row[3],
+        "isi_indeksi": row[4],
+        "timestamp": row[5].isoformat()
+    } for row in rows])
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=10000)
+    app.run(host='0.0.0.0', port=10000)
