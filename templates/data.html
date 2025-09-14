@@ -26,6 +26,11 @@
       border-radius: 4px; border: 1px solid rgba(255,255,255,0.3);
     }
     .risk-high { color:#ff3333; font-weight:bold; text-shadow:0 0 3px rgba(255,0,0,.5); }
+    .hist-btn {
+      margin-top:6px; padding:6px 10px; border:none; border-radius:6px; cursor:pointer;
+      background:#1e88e5; color:#fff; font-weight:600;
+    }
+    .hist-box { margin-top:8px; font-size:12px; max-height:160px; overflow:auto; }
   </style>
 </head>
 <body>
@@ -37,7 +42,7 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
   <script>
-    // Renk skalası (ısı/hissedilen için)
+    // Renk skalası (hissedilen °C)
     const TEMP_RANGES = [
       { min: -20, max: 0,  color: '#1a237e', label: '-20 - 0°C'  },
       { min: 0,   max: 10, color: '#1976d2', label: '0 - 10°C'   },
@@ -56,7 +61,7 @@
     const map = L.map('map').setView([36.8, 30.7], 11);
     L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { attribution: '© Google' }).addTo(map);
 
-    // Pencere/genişlik değişince kaybolma/boş renderı önle
+    // Resize'da görünmezlik sorununu önle
     window.addEventListener('resize', () => map.invalidateSize());
     map.on('resize', () => map.invalidateSize());
 
@@ -64,24 +69,29 @@
     const markerCluster = L.markerClusterGroup({
       spiderfyOnMaxZoom: true, showCoverageOnHover: false, zoomToBoundsOnClick: true, maxClusterRadius: 60
     });
-    map.addLayer(markerCluster); // ✅ her zaman haritada
+    map.addLayer(markerCluster);
 
     function createMarkers(){
       markerCluster.clearLayers();
       sensorData.forEach(p=>{
-        const heatIndex = p.heat_index;
-        const color = getColorForTemperature(heatIndex);
-        const m = L.circleMarker([p.latitude, p.longitude], {
+        const hi = p.heat_index;
+        const color = getColorForTemperature(hi);
+        const lat = p.latitude, lon = p.longitude;
+        const idKey = `${lat.toFixed(5)}-${lon.toFixed(5)}`;
+
+        const m = L.circleMarker([lat, lon], {
           radius: 6, fillColor: color, color:'#fff', weight:1, opacity:1, fillOpacity:.8
         }).bindPopup(`
-          <div style="min-width:200px">
-            <b>Konum:</b> ${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}<br>
+          <div style="min-width:220px">
+            <b>Konum:</b> ${lat.toFixed(4)}, ${lon.toFixed(4)}<br>
             <b>Sıcaklık:</b> ${p.temperature.toFixed(1)}°C<br>
-            <b>Hissedilen:</b> <span class="${heatIndex>=40?'risk-high':''}">${heatIndex.toFixed(1)}°C</span><br>
+            <b>Hissedilen:</b> <span class="${hi>=40?'risk-high':''}">${hi.toFixed(1)}°C</span><br>
             <b>Nem:</b> ${p.humidity.toFixed(1)}%<br>
             <b>Toprak Nemi:</b> ${p.soil_moisture!=null ? p.soil_moisture.toFixed(1)+'%' : '—'}<br>
             <b>Ölçüm Zamanı:</b> ${p.timestamp || 'Bilinmiyor'}
-            ${heatIndex>=50?'<br><span class="risk-high">⚠️ TEHLİKELİ SICAKLIK!</span>':''}
+            ${hi>=50?'<br><span class="risk-high">⚠️ TEHLİKELİ SICAKLIK!</span>':''}
+            <br><button class="hist-btn show-history" data-lat="${lat}" data-lon="${lon}" data-box="hist-${idKey}">Gün içi değişim</button>
+            <div class="hist-box" id="hist-${idKey}"></div>
           </div>
         `);
         markerCluster.addLayer(m);
@@ -119,7 +129,7 @@
          ${hi>=50 ? ' | <span class="risk-high">⚠️ TEHLİKE!</span>' : ''}`;
     });
 
-    // ✅ Renk lejantı geri eklendi
+    // Lejant
     const legend = L.control({position:'bottomleft'});
     legend.onAdd = function(){
       const div = L.DomUtil.create('div', 'legend');
@@ -132,6 +142,37 @@
       return div;
     };
     legend.addTo(map);
+
+    // Geçmiş butonu
+    document.addEventListener('click', async (e)=>{
+      const btn = e.target.closest('.show-history');
+      if(!btn) return;
+      const lat = parseFloat(btn.getAttribute('data-lat'));
+      const lon = parseFloat(btn.getAttribute('data-lon'));
+      const boxId = btn.getAttribute('data-box');
+      const box = document.getElementById(boxId);
+      box.innerHTML = 'Yükleniyor...';
+
+      try{
+        const res = await fetch(`/history?lat=${lat}&lon=${lon}&days=1`);
+        const data = await res.json();
+        if(!Array.isArray(data) || data.length===0){
+          box.innerHTML = 'Kayıt bulunamadı.';
+          return;
+        }
+        box.innerHTML = data.slice(0,12).map(r=>{
+          const t = new Date(r.timestamp);
+          const tm = isNaN(t) ? '' : t.toLocaleTimeString();
+          const S  = r.temperature!=null ? r.temperature.toFixed(1)+'°C' : '—';
+          const H  = r.humidity!=null ? r.humidity.toFixed(0)+'%' : '—';
+          const T  = r.soil_moisture!=null ? r.soil_moisture.toFixed(0)+'%' : '—';
+          const HI = r.heat_index!=null ? r.heat_index.toFixed(1)+'°C' : '—';
+          return `• ${tm} — S:${S}, H:${H}, T:${T}, HI:${HI}`;
+        }).join('<br>');
+      }catch(err){
+        box.innerHTML = 'Hata: ' + err;
+      }
+    });
   </script>
 </body>
 </html>
