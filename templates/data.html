@@ -1,232 +1,137 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Akıllı Sıcaklık Haritası</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
-
-    <style>
-        #map { height: 600px; }
-        .info-box {
-            position: relative;
-            width: 100%;
-            text-align: center;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 12px 20px;
-            font-size: 20px;
-            font-weight: bold;
-            border-radius: 8px;
-            margin-top: 10px;
-            box-shadow: 0 2px 15px rgba(0,0,0,0.6);
-        }
-        .legend {
-            position: absolute;
-            bottom: 30px;
-            left: 20px;
-            padding: 12px 15px;
-            background: rgba(0, 0, 0, 0.85);
-            border-radius: 8px;
-            line-height: 1.5;
-            font-size: 14px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-            color: white;
-            z-index: 1000;
-            border: 1px solid #666;
-        }
-        .legend i {
-            width: 22px;
-            height: 22px;
-            float: left;
-            margin-right: 10px;
-            opacity: 0.9;
-            border-radius: 4px;
-            border: 1px solid rgba(255,255,255,0.3);
-        }
-        .risk-high {
-            color: #ff3333;
-            font-weight: bold;
-            text-shadow: 0 0 3px rgba(255,0,0,0.5);
-        }
-        .grid-cell {
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 4px;
-            transition: none;
-            pointer-events: auto;
-        }
-        .marker-cluster-small {
-            background-color: rgba(77, 144, 254, 0.6);
-        }
-        .marker-cluster-medium {
-            background-color: rgba(240, 194, 12, 0.6);
-        }
-        .marker-cluster-large {
-            background-color: rgba(241, 128, 23, 0.6);
-        }
-        .marker-cluster-high-risk {
-            background-color: rgba(255, 51, 51, 0.6);
-        }
-        .pulse-effect {
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(255,0,0,0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(255,0,0,0); }
-            100% { box-shadow: 0 0 0 0 rgba(255,0,0,0); }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Akıllı Sıcaklık Haritası</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+  <style>
+    #map { height: 600px; }
+    .info-box {
+      position: relative; width: 100%; text-align: center;
+      background: rgba(0,0,0,0.8); color: #fff; padding: 12px 20px;
+      font-size: 20px; font-weight: bold; border-radius: 8px; margin-top: 10px;
+      box-shadow: 0 2px 15px rgba(0,0,0,0.6);
+    }
+    .legend {
+      position: absolute; bottom: 30px; left: 20px; padding: 12px 15px;
+      background: rgba(0,0,0,0.85); border-radius: 8px; line-height: 1.5; font-size: 14px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5); color: #fff; z-index: 1000; border: 1px solid #666;
+    }
+    .legend i {
+      width: 22px; height: 22px; float: left; margin-right: 10px; opacity: .9;
+      border-radius: 4px; border: 1px solid rgba(255,255,255,0.3);
+    }
+    .risk-high { color:#ff3333; font-weight:bold; text-shadow:0 0 3px rgba(255,0,0,.5); }
+  </style>
 </head>
 <body>
-    <h1>Akıllı Sıcaklık Haritası</h1>
+  <h1>Akıllı Sıcaklık Haritası</h1>
 
-    <div id="map"></div>
-    <div class="info-box" id="infoBox">Haritayı inceleyin - Yakınlaştıkça daha fazla detay görüntülenir</div>
+  <div id="map"></div>
+  <div class="info-box" id="infoBox">Haritayı inceleyin - Yakınlaştıkça daha fazla detay görüntülenir</div>
 
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+  <script>
+    // Renk skalası (ısı/hissedilen için)
+    const TEMP_RANGES = [
+      { min: -20, max: 0,  color: '#1a237e', label: '-20 - 0°C'  },
+      { min: 0,   max: 10, color: '#1976d2', label: '0 - 10°C'   },
+      { min: 10,  max: 20, color: '#00bcd4', label: '10 - 20°C'  },
+      { min: 20,  max: 30, color: '#4caf50', label: '20 - 30°C'  },
+      { min: 30,  max: 40, color: '#ffeb3b', label: '30 - 40°C'  },
+      { min: 40,  max: 50, color: '#ff9800', label: '40 - 50°C'  },
+      { min: 50,  max: 60, color: '#ff5722', label: '50 - 60°C'  },
+      { min: 60,  max: 200,color: '#c62828', label: '60°C+'      }
+    ];
+    function getColorForTemperature(t){
+      for(const r of TEMP_RANGES){ if(t>=r.min && t<r.max) return r.color; }
+      return TEMP_RANGES[TEMP_RANGES.length-1].color;
+    }
 
-    <script>
-        // Sıcaklık aralıkları ve renkler
-        const TEMP_RANGES = [
-            { min: -20, max: 0, color: '#1a237e', label: '-20 - 0°C' },
-            { min: 0, max: 10, color: '#1976d2', label: '0 - 10°C' },
-            { min: 10, max: 20, color: '#00bcd4', label: '10 - 20°C' },
-            { min: 20, max: 30, color: '#4caf50', label: '20 - 30°C' },
-            { min: 30, max: 40, color: '#ffeb3b', label: '30 - 40°C' },
-            { min: 40, max: 50, color: '#ff9800', label: '40 - 50°C' },
-            { min: 50, max: 60, color: '#ff5722', label: '50 - 60°C' },
-            { min: 60, max: 200, color: '#c62828', label: '60°C+'}
-        ];
+    const map = L.map('map').setView([36.8, 30.7], 11);
+    L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { attribution: '© Google' }).addTo(map);
 
-        const map = L.map('map').setView([36.8, 30.7], 11);
-        L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-            attribution: '© Google'
-        }).addTo(map);
+    // Pencere/genişlik değişince kaybolma/boş renderı önle
+    window.addEventListener('resize', () => map.invalidateSize());
+    map.on('resize', () => map.invalidateSize());
 
-        let sensorData = [];
-        let markerCluster = L.markerClusterGroup({
-            spiderfyOnMaxZoom: true,
-            showCoverageOnHover: false,
-            zoomToBoundsOnClick: true,
-            maxClusterRadius: 60
-        });
-        let gridLayer = null;
+    let sensorData = [];
+    const markerCluster = L.markerClusterGroup({
+      spiderfyOnMaxZoom: true, showCoverageOnHover: false, zoomToBoundsOnClick: true, maxClusterRadius: 60
+    });
+    map.addLayer(markerCluster); // ✅ her zaman haritada
 
-        // Sıcaklığa göre renk bulma
-        function getColorForTemperature(temp) {
-            for (let range of TEMP_RANGES) {
-                if (temp >= range.min && temp < range.max) {
-                    return range.color;
-                }
-            }
-            return TEMP_RANGES[TEMP_RANGES.length-1].color;
-        }
+    function createMarkers(){
+      markerCluster.clearLayers();
+      sensorData.forEach(p=>{
+        const heatIndex = p.heat_index;
+        const color = getColorForTemperature(heatIndex);
+        const m = L.circleMarker([p.latitude, p.longitude], {
+          radius: 6, fillColor: color, color:'#fff', weight:1, opacity:1, fillOpacity:.8
+        }).bindPopup(`
+          <div style="min-width:200px">
+            <b>Konum:</b> ${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}<br>
+            <b>Sıcaklık:</b> ${p.temperature.toFixed(1)}°C<br>
+            <b>Hissedilen:</b> <span class="${heatIndex>=40?'risk-high':''}">${heatIndex.toFixed(1)}°C</span><br>
+            <b>Nem:</b> ${p.humidity.toFixed(1)}%<br>
+            <b>Toprak Nemi:</b> ${p.soil_moisture!=null ? p.soil_moisture.toFixed(1)+'%' : '—'}<br>
+            <b>Ölçüm Zamanı:</b> ${p.timestamp || 'Bilinmiyor'}
+            ${heatIndex>=50?'<br><span class="risk-high">⚠️ TEHLİKELİ SICAKLIK!</span>':''}
+          </div>
+        `);
+        markerCluster.addLayer(m);
+      });
+    }
 
-        // Marker oluşturma
-        function createIndividualMarkers() {
-            markerCluster.clearLayers();
-            
-            sensorData.forEach(point => {
-                const temp = point.temperature;
-                const heatIndex = point.heat_index;
-                const soil = point.soil_moisture;
-                const color = getColorForTemperature(heatIndex);
-                
-                const marker = L.circleMarker([point.latitude, point.longitude], {
-                    radius: 6,
-                    fillColor: color,
-                    color: '#fff',
-                    weight: 1,
-                    opacity: 1,
-                    fillOpacity: 0.8,
-                    temperature: heatIndex
-                });
-                
-                marker.bindPopup(`
-                    <div style="min-width:200px">
-                        <b>Konum:</b> ${point.latitude.toFixed(4)}, ${point.longitude.toFixed(4)}<br>
-                        <b>Sıcaklık:</b> ${temp.toFixed(1)}°C<br>
-                        <b>Hissedilen Sıcaklık:</b> <span class="${heatIndex >= 40 ? 'risk-high' : ''}">${heatIndex.toFixed(1)}°C</span><br>
-                        <b>Nem:</b> ${point.humidity.toFixed(1)}%<br>
-                        <b>Toprak Nemi:</b> ${soil != null ? soil.toFixed(1)+'%' : '—'}<br>
-                        <b>Ölçüm Zamanı:</b> ${point.timestamp || 'Bilinmiyor'}
-                        ${heatIndex >= 50 ? '<br><span class="risk-high">⚠️ TEHLİKELİ SICAKLIK!</span>' : ''}
-                    </div>
-                `);
-                
-                markerCluster.addLayer(marker);
-            });
-            
-            map.addLayer(markerCluster);
-        }
+    // Veri yükle
+    fetch('/data')
+      .then(r=>r.json())
+      .then(d=>{ sensorData = d; createMarkers(); })
+      .catch(err=>{
+        console.error('Veri yüklenirken hata:', err);
+        document.getElementById('infoBox').innerHTML =
+          '<span style="color:#ff4444">Veri yüklenemedi. Lütfen tekrar deneyin.</span>';
+      });
 
-        // Zoom seviyesine göre görünümü ayarla
-        function updateViewBasedOnZoom() {
-            if (map.getZoom() < 12) {
-                if (markerCluster) map.removeLayer(markerCluster);
-                if (gridLayer) map.removeLayer(gridLayer);
-            } else {
-                if (gridLayer) map.removeLayer(gridLayer);
-                createIndividualMarkers();
-            }
-        }
+    // Hover özet
+    function nearestPoint(lat, lon){
+      let best=null, bd=Infinity;
+      for(const p of sensorData){
+        const d=(lat-p.latitude)**2 + (lon-p.longitude)**2;
+        if(d<bd){ bd=d; best=p; }
+      }
+      return best;
+    }
+    map.on('mousemove', e=>{
+      const p = nearestPoint(e.latlng.lat, e.latlng.lng);
+      if(!p) return;
+      const hi=p.heat_index;
+      document.getElementById('infoBox').innerHTML =
+        `<b>Sıcaklık:</b> ${p.temperature.toFixed(1)}°C |
+         <b>Hissedilen:</b> <span class="${hi>=40?'risk-high':''}">${hi.toFixed(1)}°C</span> |
+         <b>Nem:</b> ${p.humidity.toFixed(1)}% |
+         <b>Toprak Nemi:</b> ${p.soil_moisture!=null ? p.soil_moisture.toFixed(1)+'%' : '—'}
+         ${hi>=50 ? ' | <span class="risk-high">⚠️ TEHLİKE!</span>' : ''}`;
+    });
 
-        // En yakın noktayı bul
-        function getNearestPoint(lat, lon) {
-            let minDist = Infinity;
-            let nearest = null;
-            
-            sensorData.forEach(point => {
-                const dist = Math.sqrt(
-                    Math.pow(lat - point.latitude, 2) + 
-                    Math.pow(lon - point.longitude, 2)
-                );
-                
-                if (dist < minDist) {
-                    minDist = dist;
-                    nearest = point;
-                }
-            });
-            
-            return nearest;
-        }
-
-        // Verileri yükle
-        fetch('/data')
-            .then(response => response.json())
-            .then(data => {
-                sensorData = data;
-                updateViewBasedOnZoom();
-            })
-            .catch(error => {
-                console.error('Veri yüklenirken hata:', error);
-                document.getElementById('infoBox').innerHTML = 
-                    '<span style="color:#ff4444">Veri yüklenemedi. Lütfen tekrar deneyin.</span>';
-            });
-
-        // Fare hareketinde bilgi kutusu güncelle
-        map.on('mousemove', (e) => {
-            const point = getNearestPoint(e.latlng.lat, e.latlng.lng);
-            if (point) {
-                const temp = point.temperature;
-                const heatIndex = point.heat_index;
-                const soil = point.soil_moisture;
-                document.getElementById('infoBox').innerHTML = `
-                    <b>Sıcaklık:</b> ${temp.toFixed(1)}°C | 
-                    <b>Hissedilen:</b> <span class="${heatIndex >= 40 ? 'risk-high' : ''}">${heatIndex.toFixed(1)}°C</span> | 
-                    <b>Nem:</b> ${point.humidity.toFixed(1)}% | 
-                    <b>Toprak Nemi:</b> ${soil != null ? soil.toFixed(1)+'%' : '—'}
-                    ${heatIndex >= 50 ? ' | <span class="risk-high">⚠️ TEHLİKE!</span>' : ''}
-                `;
-            }
-        });
-
-        map.on('zoomend', updateViewBasedOnZoom);
-    </script>
+    // ✅ Renk lejantı geri eklendi
+    const legend = L.control({position:'bottomleft'});
+    legend.onAdd = function(){
+      const div = L.DomUtil.create('div', 'legend');
+      let html = '<h4>Renk Skalası (Hissedilen °C)</h4>';
+      TEMP_RANGES.forEach(r=>{
+        html += `<i style="background:${r.color}"></i> ${r.label}<br>`;
+      });
+      html += '<hr style="margin:8px 0;border-color:#555"><small>Renkler hissedilen sıcaklığa göre belirlenir.</small>';
+      div.innerHTML = html;
+      return div;
+    };
+    legend.addTo(map);
+  </script>
 </body>
 </html>
