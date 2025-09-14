@@ -1,56 +1,4 @@
 from flask import Flask, render_template, request, jsonify
-import psycopg2
-import math
-
-app = Flask(__name__)
-
-# Veritabanı bağlantısı
-DB_URL = "postgresql://sensor_user:amLdGfRtXTtpye0zB6kHVBkZvmiQ0fyO@dpg-d2vjqu8dl3ps73992d3g-a.frankfurt-postgres.render.com:5432/sensor_data_db_x3lm"
-
-def get_conn():
-    return psycopg2.connect(DB_URL, sslmode="require")
-
-# --- Isı indeksi ---
-def calculate_heat_index(T, RH):
-    return (-8.78469475556 + 1.61139411*T + 2.33854883889*RH - 0.14611605*T*RH
-            - 0.012308094*T**2 - 0.0164248277778*RH**2 + 0.002211732*T**2*RH
-            + 0.00072546*T*RH**2 - 0.000003582*T**2*RH**2)
-
-# --- Sayfalar ---
-@app.route("/")
-def index():
-    return render_template("data.html")
-
-@app.route("/veri_form")
-def veri_form():
-    return render_template("veri_form.html")
-
-# --- JSON ile veri ekleme (Arduino/telefon köprüsünden de bunu çağıracağız) ---
-@app.route("/veri", methods=["POST"])
-def veri():
-    try:
-        d = request.get_json(force=True)
-        sicaklik = float(d["sicaklik"])
-        nem      = float(d["nem"])
-        enlem    = float(d["enlem"])
-        boylam   = float(d["boylam"])
-
-        isi = calculate_heat_index(sicaklik, nem)
-
-        with get_conn() as c:
-            with c.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO sensor_verileri (sicaklik, nem, enlem, boylam, isi_indeksi) "
-                    "VALUES (%s, %s, %s, %s, %s)",
-                    (sicaklik, nem, enlem, boylam, isi)
-                )
-                c.commit()
-
-        return jsonify({"status": "success"}), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
-
-from flask import Flask, render_template, request, jsonify
 import os
 import psycopg2
 
@@ -62,21 +10,15 @@ DB_URL = "postgresql://sensor_user:amLdGfRtXTtpye0zB6kHVBkZvmiQ0fyO@dpg-d2vjqu8d
 def get_conn():
     return psycopg2.connect(DB_URL, sslmode="require")
 
-# --- Tablo yoksa oluştur ---
+# --- Tabloya toprak_nem sütunu ekle (yoksa) ---
 with get_conn() as c:
     with c.cursor() as cur:
         cur.execute("""
-        CREATE TABLE IF NOT EXISTS sensor_verileri (
-            id SERIAL PRIMARY KEY,
-            sicaklik FLOAT,
-            nem FLOAT,
-            enlem FLOAT,
-            boylam FLOAT,
-            isi_indeksi FLOAT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
+        ALTER TABLE sensor_verileri 
+        ADD COLUMN IF NOT EXISTS toprak_nem FLOAT;
         """)
         c.commit()
+
 
 # --- Isı indeksi ---
 def calculate_heat_index(T, RH):
@@ -98,19 +40,20 @@ def veri_form():
 def veri():
     try:
         d = request.get_json(force=True)
-        sicaklik = float(d["sicaklik"])
-        nem      = float(d["nem"])
-        enlem    = float(d["enlem"])
-        boylam   = float(d["boylam"])
+        sicaklik   = float(d["sicaklik"])
+        nem        = float(d["nem"])
+        toprak_nem = float(d["toprak_nem"])
+        enlem      = float(d["enlem"])
+        boylam     = float(d["boylam"])
 
         isi = calculate_heat_index(sicaklik, nem)
 
         with get_conn() as c:
             with c.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO sensor_verileri (sicaklik, nem, enlem, boylam, isi_indeksi) "
-                    "VALUES (%s, %s, %s, %s, %s)",
-                    (sicaklik, nem, enlem, boylam, isi)
+                    "INSERT INTO sensor_verileri (sicaklik, nem, toprak_nem, enlem, boylam, isi_indeksi) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    (sicaklik, nem, toprak_nem, enlem, boylam, isi)
                 )
                 c.commit()
 
@@ -122,24 +65,25 @@ def veri():
 @app.route("/sms", methods=["POST"])
 def sms():
     try:
-        # Tasker Body JSON ile: {"sms": "S:25.3,N:70,E:36.544,B:32.003"}
+        # Tasker Body JSON ile: {"sms": "S:25.3,N:70,T:25.3,E:36.544,B:32.003"}
         body = request.get_json(force=True).get("sms", "").strip()
 
         # SMS'i parse et
         parts = dict(item.split(":") for item in body.split(","))
-        sicaklik = float(parts["S"])
-        nem      = float(parts["N"])
-        enlem    = float(parts["E"])
-        boylam   = float(parts["B"])
+        sicaklik   = float(parts["S"])
+        nem        = float(parts["N"])
+        toprak_nem = float(parts["T"])
+        enlem      = float(parts["E"])
+        boylam     = float(parts["B"])
 
         isi = calculate_heat_index(sicaklik, nem)
 
         with get_conn() as c:
             with c.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO sensor_verileri (sicaklik, nem, enlem, boylam, isi_indeksi) "
-                    "VALUES (%s, %s, %s, %s, %s)",
-                    (sicaklik, nem, enlem, boylam, isi)
+                    "INSERT INTO sensor_verileri (sicaklik, nem, toprak_nem, enlem, boylam, isi_indeksi) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    (sicaklik, nem, toprak_nem, enlem, boylam, isi)
                 )
                 c.commit()
 
@@ -153,25 +97,22 @@ def data():
     with get_conn() as c:
         with c.cursor() as cur:
             cur.execute("""
-                SELECT sicaklik, nem, enlem, boylam, isi_indeksi, timestamp
+                SELECT sicaklik, nem, toprak_nem, enlem, boylam, isi_indeksi, timestamp
                 FROM sensor_verileri
             """)
             rows = cur.fetchall()
 
-    # Frontend'in beklediği isimlerle dön
     return jsonify([
         {
             "temperature": r[0],
             "humidity": r[1],
-            "latitude": r[2],
-            "longitude": r[3],
-            "heat_index": r[4],
-            "timestamp": r[5].isoformat() if r[5] else None
+            "soil_moisture": r[2],
+            "latitude": r[3],
+            "longitude": r[4],
+            "heat_index": r[5],
+            "timestamp": r[6].isoformat() if r[6] else None
         } for r in rows
     ])
-
-
-# (İstersen Tasker/Twilio için SMS webhook'u da ekleyebilirim: /sms)
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
