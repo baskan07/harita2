@@ -174,20 +174,28 @@ def history():
     try:
         lat = float(request.args.get("lat"))
         lon = float(request.args.get("lon"))
-        days = int(request.args.get("days", 1))
+        days = request.args.get("days")
+        hours = request.args.get("hours")
+
         lat_r = round5(lat)
         lon_r = round5(lon)
 
+        interval = "1 day"
+        if hours:
+            interval = f"{int(hours)} hours"
+        elif days:
+            interval = f"{int(days)} days"
+
         with get_conn() as c:
             with c.cursor() as cur:
-                cur.execute("""
+                cur.execute(f"""
                     SELECT sicaklik, nem, toprak_nem, isi_indeksi, timestamp
                     FROM sensor_verileri
                     WHERE ROUND(enlem::numeric, 5) = %s
                       AND ROUND(boylam::numeric, 5) = %s
-                      AND timestamp >= NOW() - (%s || ' days')::interval
-                    ORDER BY timestamp DESC
-                """, (lat_r, lon_r, days))
+                      AND timestamp >= NOW() - interval %s
+                    ORDER BY timestamp ASC
+                """, (lat_r, lon_r, interval))
                 rows = cur.fetchall()
 
         return jsonify([
