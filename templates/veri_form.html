@@ -1,134 +1,84 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Veri Ekle</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            margin: 50px;
-        }
-        form {
-            display: inline-block;
-            text-align: left;
-            margin-top: 20px;
-        }
-        input {
-            display: block;
-            width: 300px;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        input[readonly] {
-            background-color: #f1f1f1;
-            color: #333;
-        }
-        button {
-            padding: 10px 20px;
-            background: green;
-            color: white;
-            border: none;
-            cursor: pointer;
-            border-radius: 5px;
-            font-weight: bold;
-        }
-        #map {
-            height: 400px;
-            width: 80%;
-            margin: auto;
-            border: 2px solid #ccc;
-            border-radius: 6px;
-        }
-        .flash-success { color: green; }
-        .flash-danger { color: red; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Veri Ekle</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 50px; }
+    form { display: inline-block; text-align: left; margin-top: 20px; }
+    input { display: block; width: 300px; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }
+    input[readonly] { background-color: #f1f1f1; color: #333; }
+    button { padding: 10px 20px; background: green; color: white; border: none; cursor: pointer; border-radius: 5px; font-weight: bold; }
+    #map { height: 400px; width: 80%; margin: auto; border: 2px solid #ccc; border-radius: 6px; }
+  </style>
 </head>
 <body>
+  <h2>Yeni Sensör Verisi Ekle</h2>
 
-    <h2>Yeni Sensör Verisi Ekle</h2>
+  <div id="map"></div>
 
-    <div id="map"></div>
+  <form id="sensorForm">
+    <label>Enlem (Latitude):</label>
+    <input type="text" id="latitude" name="latitude" readonly required>
 
-    <form id="sensorForm">
-        <label>Enlem (Latitude):</label>
-        <input type="text" id="latitude" name="latitude" readonly required>
+    <label>Boylam (Longitude):</label>
+    <input type="text" id="longitude" name="longitude" readonly required>
 
-        <label>Boylam (Longitude):</label>
-        <input type="text" id="longitude" name="longitude" readonly required>
+    <label>Sıcaklık (°C):</label>
+    <input type="number" id="temperature" name="temperature" required min="-50" max="60" step="0.1">
 
-        <label>Sıcaklık (°C):</label>
-        <input type="number" id="temperature" name="temperature" required min="-50" max="60" step="0.1">
+    <label>Nem (%):</label>
+    <input type="number" id="humidity" name="humidity" required min="0" max="100" step="0.1">
 
-        <label>Nem (%):</label>
-        <input type="number" id="humidity" name="humidity" required min="0" max="100" step="0.1">
+    <label>Toprak Nem (%):</label>
+    <input type="number" id="soil_moisture" name="soil_moisture" required min="0" max="100" step="0.1">
 
-        <label>Toprak Nem (%):</label>
-        <input type="number" id="soil_moisture" name="soil_moisture" required min="0" max="100" step="0.1">
+    <button type="submit">Veriyi Kaydet</button>
+  </form>
 
-        <button type="submit">Veriyi Kaydet</button>
-    </form>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    var map = L.map('map').setView([36.89, 30.70], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(map);
 
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script>
-        var map = L.map('map').setView([36.89, 30.70], 12); // Antalya merkez
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
+    var marker;
+    map.on('click', function(e) {
+      var lat = e.latlng.lat.toFixed(6);
+      var lon = e.latlng.lng.toFixed(6);
+      document.getElementById('latitude').value = lat;
+      document.getElementById('longitude').value = lon;
+      if (marker) map.removeLayer(marker);
+      marker = L.marker([lat, lon]).addTo(map).bindPopup("Seçilen Nokta<br>Lat: " + lat + "<br>Lon: " + lon).openPopup();
+    });
 
-        var marker;
-
-        map.on('click', function(e) {
-            var lat = e.latlng.lat.toFixed(6);
-            var lon = e.latlng.lng.toFixed(6);
-
-            document.getElementById('latitude').value = lat;
-            document.getElementById('longitude').value = lon;
-
-            if (marker) {
-                map.removeLayer(marker);
-            }
-
-            marker = L.marker([lat, lon]).addTo(map)
-                .bindPopup("Seçilen Nokta<br>Latitude: " + lat + "<br>Longitude: " + lon)
-                .openPopup();
+    document.getElementById('sensorForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const payload = {
+        sicaklik:   parseFloat(document.getElementById('temperature').value),
+        nem:        parseFloat(document.getElementById('humidity').value),
+        toprak_nem: parseFloat(document.getElementById('soil_moisture').value),
+        enlem:      parseFloat(document.getElementById('latitude').value),
+        boylam:     parseFloat(document.getElementById('longitude').value)
+      };
+      try{
+        const res = await fetch('/veri', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         });
-
-        // Formu JSON olarak gönder
-        document.getElementById('sensorForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const payload = {
-                sicaklik: parseFloat(document.getElementById('temperature').value),
-                nem: parseFloat(document.getElementById('humidity').value),
-                toprak_nem: parseFloat(document.getElementById('soil_moisture').value),
-                enlem: parseFloat(document.getElementById('latitude').value),
-                boylam: parseFloat(document.getElementById('longitude').value)
-            };
-
-            try {
-                const res = await fetch('/veri', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (res.ok) {
-                    alert("✅ Veri başarıyla kaydedildi!");
-                    document.getElementById('sensorForm').reset();
-                } else {
-                    const err = await res.json();
-                    alert("❌ Hata: " + err.message);
-                }
-            } catch (err) {
-                alert("❌ Sunucuya bağlanılamadı: " + err);
-            }
-        });
-    </script>
-
+        if (res.ok) {
+          alert("✅ Veri başarıyla kaydedildi!");
+          document.getElementById('sensorForm').reset();
+        } else {
+          const err = await res.json().catch(()=>({message:'Bilinmeyen hata'}));
+          alert("❌ Hata: " + (err.message || 'Sunucu hatası'));
+        }
+      }catch(err){
+        alert("❌ Sunucuya bağlanılamadı: " + err);
+      }
+    });
+  </script>
 </body>
 </html>
