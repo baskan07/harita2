@@ -52,17 +52,9 @@
 
     <h2>Yeni Sensör Verisi Ekle</h2>
 
-    {% with messages = get_flashed_messages(with_categories=True) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <p class="flash-{{ category }}">{{ message }}</p>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
     <div id="map"></div>
 
-    <form action="/veri" method="post">
+    <form id="sensorForm">
         <label>Enlem (Latitude):</label>
         <input type="text" id="latitude" name="latitude" readonly required>
 
@@ -70,10 +62,13 @@
         <input type="text" id="longitude" name="longitude" readonly required>
 
         <label>Sıcaklık (°C):</label>
-        <input type="number" name="temperature" required min="-50" max="60" step="0.1">
+        <input type="number" id="temperature" name="temperature" required min="-50" max="60" step="0.1">
 
         <label>Nem (%):</label>
-        <input type="number" name="humidity" required min="0" max="100" step="0.1">
+        <input type="number" id="humidity" name="humidity" required min="0" max="100" step="0.1">
+
+        <label>Toprak Nem (%):</label>
+        <input type="number" id="soil_moisture" name="soil_moisture" required min="0" max="100" step="0.1">
 
         <button type="submit">Veriyi Kaydet</button>
     </form>
@@ -101,6 +96,37 @@
             marker = L.marker([lat, lon]).addTo(map)
                 .bindPopup("Seçilen Nokta<br>Latitude: " + lat + "<br>Longitude: " + lon)
                 .openPopup();
+        });
+
+        // Formu JSON olarak gönder
+        document.getElementById('sensorForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const payload = {
+                sicaklik: parseFloat(document.getElementById('temperature').value),
+                nem: parseFloat(document.getElementById('humidity').value),
+                toprak_nem: parseFloat(document.getElementById('soil_moisture').value),
+                enlem: parseFloat(document.getElementById('latitude').value),
+                boylam: parseFloat(document.getElementById('longitude').value)
+            };
+
+            try {
+                const res = await fetch('/veri', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    alert("✅ Veri başarıyla kaydedildi!");
+                    document.getElementById('sensorForm').reset();
+                } else {
+                    const err = await res.json();
+                    alert("❌ Hata: " + err.message);
+                }
+            } catch (err) {
+                alert("❌ Sunucuya bağlanılamadı: " + err);
+            }
         });
     </script>
 
