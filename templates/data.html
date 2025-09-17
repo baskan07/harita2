@@ -56,7 +56,6 @@
 
     const map = L.map('map').setView([36.8, 30.7], 11);
     L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { attribution: '© Google' }).addTo(map);
-
     window.addEventListener('resize', () => map.invalidateSize());
 
     let sensorData = [];
@@ -64,23 +63,37 @@
     map.addLayer(markerCluster);
 
     const markers = {};      // idKey → marker
-    const charts = {};       // idKey → chart instance
-    const chartTimers = {};  // idKey → interval ID
+    const charts = {};       // idKey → Chart instance
+    const chartTimers = {};  // idKey → interval
 
-    function buildPopup(p, idKey){
+    function popupHTML(p, idKey){
       const hi = p.heat_index;
       return `
         <div style="min-width:240px">
-          <b>Konum:</b> ${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}<br>
-          <b>Sıcaklık:</b> ${p.temperature.toFixed(1)}°C<br>
-          <b>Hissedilen:</b> <span class="${hi>=40?'risk-high':''}">${hi.toFixed(1)}°C</span><br>
-          <b>Nem:</b> ${p.humidity.toFixed(1)}%<br>
-          <b>Toprak Nemi:</b> ${p.soil_moisture!=null ? p.soil_moisture.toFixed(1)+'%' : '—'}<br>
-          <b>Ölçüm Zamanı:</b> ${p.timestamp || 'Bilinmiyor'}
+          <b>Konum:</b> <span id="loc-${idKey}">${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}</span><br>
+          <b>Sıcaklık:</b> <span id="t-${idKey}">${p.temperature.toFixed(1)}</span>°C<br>
+          <b>Hissedilen:</b> <span id="hi-${idKey}" class="${hi>=40?'risk-high':''}">${hi.toFixed(1)}</span>°C<br>
+          <b>Nem:</b> <span id="h-${idKey}">${p.humidity.toFixed(1)}</span>%<br>
+          <b>Toprak Nemi:</b> <span id="sm-${idKey}">${p.soil_moisture!=null ? p.soil_moisture.toFixed(1) : '—'}</span>%<br>
+          <b>Ölçüm Zamanı:</b> <span id="ts-${idKey}">${p.timestamp || 'Bilinmiyor'}</span>
           ${hi>=50?'<br><span class="risk-high">⚠️ TEHLİKELİ SICAKLIK!</span>':''}
           <div class="hist-box"><canvas id="hist-${idKey}" width="220" height="120"></canvas></div>
         </div>
       `;
+    }
+
+    function updatePopupText(p, idKey){
+      const set = (sel, val) => { const el = document.getElementById(sel); if(el) el.textContent = val; };
+      set(`t-${idKey}`,  p.temperature.toFixed(1));
+      set(`h-${idKey}`,  p.humidity.toFixed(1));
+      set(`sm-${idKey}`, p.soil_moisture!=null ? p.soil_moisture.toFixed(1) : '—');
+      set(`hi-${idKey}`, p.heat_index.toFixed(1));
+      const hiSpan = document.getElementById(`hi-${idKey}`);
+      if (hiSpan) {
+        if (p.heat_index>=40) hiSpan.classList.add('risk-high');
+        else hiSpan.classList.remove('risk-high');
+      }
+      set(`ts-${idKey}`, p.timestamp || 'Bilinmiyor');
     }
 
     function updateMarkers(){
@@ -92,7 +105,7 @@
         if(!markers[idKey]){
           const m = L.circleMarker([lat, lon], {
             radius: 6, fillColor: color, color:'#fff', weight:1, opacity:1, fillOpacity:.8
-          }).bindPopup(buildPopup(p, idKey));
+          }).bindPopup(popupHTML(p, idKey));
 
           markers[idKey] = m;
           markerCluster.addLayer(m);
@@ -100,7 +113,14 @@
           m.on('popupopen', ()=> startChart(lat, lon, idKey));
           m.on('popupclose', ()=> stopChart(idKey));
         } else {
-          markers[idKey].setPopupContent(buildPopup(p, idKey));
+          // Popup açıksa iç metinleri güncelle; kapalıysa içerik komple güncellenebilir.
+          if (markers[idKey].isPopupOpen()) {
+            updatePopupText(p, idKey);
+          } else {
+            markers[idKey].setPopupContent(popupHTML(p, idKey));
+          }
+          // Renk (stil) güncelle
+          markers[idKey].setStyle({ fillColor: color });
         }
       });
     }
@@ -149,28 +169,33 @@
     };
     legend.addTo(map);
 
-    // 🔹 Chart başlat/güncelle
+    // --- Chart başlat / sadece update ---
     async function startChart(lat, lon, idKey){
       const ctx = document.getElementById("hist-"+idKey).getContext('2d');
 
-      async function updateChart(){
+      async function fetchAndUpdate(){
         const res = await fetch(`/history?lat=${lat}&lon=${lon}&hours=2`);
         const data = await res.json();
         if(!Array.isArray(data) || data.length===0){
-          ctx.font = "14px Arial"; ctx.fillText("Veri yok", 20, 60); return;
+          if(!charts[idKey]){ ctx.font = "14px Arial"; ctx.fillText("Veri yok", 20, 60); }
+          return;
         }
         const labels = data.map(r=> new Date(r.timestamp).toLocaleTimeString());
         const temps  = data.map(r=> r.temperature);
         const soils  = data.map(r=> r.soil_moisture);
+        const hums   = data.map(r=> r.humidity);
+        const his    = data.map(r=> r.heat_index);
 
         if(!charts[idKey]){
           charts[idKey] = new Chart(ctx, {
             type: 'line',
             data: {
-              labels: labels,
+              labels,
               datasets: [
-                { label:"Sıcaklık (°C)", data:temps, borderColor:"red", fill:false, tension:0.2 },
-                { label:"Toprak Nem (%)", data:soils, borderColor:"blue", fill:false, tension:0.2 }
+                { label:"Sıcaklık (°C)",   data:temps, borderColor:"red",   fill:false, tension:0.2 },
+                { label:"Toprak Nem (%)",  data:soils, borderColor:"blue",  fill:false, tension:0.2 },
+                { label:"Nem (%RH)",       data:hums,  borderColor:"green", fill:false, tension:0.2 },
+                { label:"Isı İndeksi (°C)",data:his,   borderColor:"orange",fill:false, tension:0.2 }
               ]
             },
             options: {
@@ -180,15 +205,21 @@
             }
           });
         } else {
-          charts[idKey].data.labels = labels;
-          charts[idKey].data.datasets[0].data = temps;
-          charts[idKey].data.datasets[1].data = soils;
-          charts[idKey].update();
+          const ch = charts[idKey];
+          ch.data.labels = labels;
+          ch.data.datasets[0].data = temps;
+          ch.data.datasets[1].data = soils;
+          ch.data.datasets[2].data = hums;
+          ch.data.datasets[3].data = his;
+          ch.update();
         }
       }
 
-      await updateChart();
-      chartTimers[idKey] = setInterval(updateChart, 5000);
+      await fetchAndUpdate();
+      // Tek interval – varsa yenisini ekleme
+      if(!chartTimers[idKey]){
+        chartTimers[idKey] = setInterval(fetchAndUpdate, 5000);
+      }
     }
 
     function stopChart(idKey){
