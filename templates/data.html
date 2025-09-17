@@ -43,7 +43,6 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
   <script>
-    // 🔹 Renk skalası (hissedilen °C)
     const TEMP_RANGES = [
       { min: -20, max: 0,  color: '#1a237e', label: '-20 - 0°C'  },
       { min: 0,   max: 10, color: '#1976d2', label: '0 - 10°C'   },
@@ -62,93 +61,79 @@
     const map = L.map('map').setView([36.8, 30.7], 11);
     L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { attribution: '© Google' }).addTo(map);
 
-    // Resize sorunu düzelt
     window.addEventListener('resize', () => map.invalidateSize());
-    map.on('resize', () => map.invalidateSize());
 
     let sensorData = [];
-    const markerCluster = L.markerClusterGroup({
-      spiderfyOnMaxZoom: true, showCoverageOnHover: false, zoomToBoundsOnClick: true, maxClusterRadius: 60
-    });
+    const markerCluster = L.markerClusterGroup();
     map.addLayer(markerCluster);
 
-    // 🔹 Açık popup koordinatı
-    let lastOpenCoords = null;
-    map.on('popupopen', (e)=>{
-      const ll = e.popup.getLatLng();
-      lastOpenCoords = { lat: ll.lat.toFixed(5), lon: ll.lng.toFixed(5) };
-    });
-    map.on('popupclose', ()=>{ lastOpenCoords = null; });
+    const markers = {};  // idKey → marker
+    const charts = {};   // idKey → chart instance
 
-    function createMarkers(){
-      markerCluster.clearLayers();
+    function buildPopup(p, idKey){
+      const hi = p.heat_index;
+      return `
+        <div style="min-width:230px">
+          <b>Konum:</b> ${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}<br>
+          <b>Sıcaklık:</b> ${p.temperature.toFixed(1)}°C<br>
+          <b>Hissedilen:</b> <span class="${hi>=40?'risk-high':''}">${hi.toFixed(1)}°C</span><br>
+          <b>Nem:</b> ${p.humidity.toFixed(1)}%<br>
+          <b>Toprak Nemi:</b> ${p.soil_moisture!=null ? p.soil_moisture.toFixed(1)+'%' : '—'}<br>
+          <b>Ölçüm Zamanı:</b> ${p.timestamp || 'Bilinmiyor'}
+          ${hi>=50?'<br><span class="risk-high">⚠️ TEHLİKELİ SICAKLIK!</span>':''}
+          <br><button class="hist-btn show-history" data-lat="${p.latitude}" data-lon="${p.longitude}" data-id="${idKey}">Son 2 Saatlik Değişim</button>
+          <div class="hist-box"><canvas id="hist-${idKey}" width="220" height="120"></canvas></div>
+        </div>
+      `;
+    }
+
+    function updateMarkers(){
       sensorData.forEach(p=>{
-        const hi = p.heat_index;
-        const color = getColorForTemperature(hi);
         const lat = p.latitude, lon = p.longitude;
         const idKey = `${lat.toFixed(5)}-${lon.toFixed(5)}`;
+        const color = getColorForTemperature(p.heat_index);
 
-        const m = L.circleMarker([lat, lon], {
-          radius: 6, fillColor: color, color:'#fff', weight:1, opacity:1, fillOpacity:.8
-        }).bindPopup(`
-          <div style="min-width:230px">
-            <b>Konum:</b> ${lat.toFixed(4)}, ${lon.toFixed(4)}<br>
-            <b>Sıcaklık:</b> ${p.temperature.toFixed(1)}°C<br>
-            <b>Hissedilen:</b> <span class="${hi>=40?'risk-high':''}">${hi.toFixed(1)}°C</span><br>
-            <b>Nem:</b> ${p.humidity.toFixed(1)}%<br>
-            <b>Toprak Nemi:</b> ${p.soil_moisture!=null ? p.soil_moisture.toFixed(1)+'%' : '—'}<br>
-            <b>Ölçüm Zamanı:</b> ${p.timestamp || 'Bilinmiyor'}
-            ${hi>=50?'<br><span class="risk-high">⚠️ TEHLİKELİ SICAKLIK!</span>':''}
-            <br><button class="hist-btn show-history" data-lat="${lat}" data-lon="${lon}" data-box="hist-${idKey}">Son 2 Saatlik Değişim</button>
-            <div class="hist-box"><canvas id="hist-${idKey}" width="220" height="120"></canvas></div>
-          </div>
-        `);
-
-        markerCluster.addLayer(m);
-
-        // 🔸 Açık popup varsa tekrar aç
-        if (lastOpenCoords &&
-            lastOpenCoords.lat == lat.toFixed(5) &&
-            lastOpenCoords.lon == lon.toFixed(5)) {
-          m.once('add', ()=> setTimeout(()=> m.openPopup(), 0));
+        if(!markers[idKey]){
+          // yeni marker
+          const m = L.circleMarker([lat, lon], {
+            radius: 6, fillColor: color, color:'#fff', weight:1, opacity:1, fillOpacity:.8
+          }).bindPopup(buildPopup(p, idKey));
+          markers[idKey] = m;
+          markerCluster.addLayer(m);
+        } else {
+          // mevcut marker → popup içeriğini güncelle
+          markers[idKey].setPopupContent(buildPopup(p, idKey));
         }
       });
     }
 
-    // 🔹 Veri yükleme
     async function loadData(){
       try{
         const r = await fetch('/data', { cache:'no-store' });
         const d = await r.json();
         sensorData = d;
-        createMarkers();
-      }catch(err){
-        console.error("Veri alınamadı", err);
-      }
+        updateMarkers();
+      }catch(err){ console.error("Veri alınamadı", err); }
     }
 
-    // İlk yükleme ve periyodik yenileme
     loadData();
     setInterval(loadData, 5000);
 
     // Hover özet
-    function nearestPoint(lat, lon){
-      let best=null, bd=Infinity;
-      for(const p of sensorData){
-        const d=(lat-p.latitude)**2 + (lon-p.longitude)**2;
-        if(d<bd){ bd=d; best=p; }
-      }
-      return best;
-    }
     map.on('mousemove', e=>{
-      const p = nearestPoint(e.latlng.lat, e.latlng.lng);
-      if(!p) return;
-      const hi=p.heat_index;
+      if(sensorData.length==0) return;
+      let best=null, bd=Infinity;
+      sensorData.forEach(p=>{
+        const d=(e.latlng.lat-p.latitude)**2 + (e.latlng.lng-p.longitude)**2;
+        if(d<bd){ bd=d; best=p; }
+      });
+      if(!best) return;
+      const hi=best.heat_index;
       document.getElementById('infoBox').innerHTML =
-        `<b>Sıcaklık:</b> ${p.temperature.toFixed(1)}°C |
+        `<b>Sıcaklık:</b> ${best.temperature.toFixed(1)}°C |
          <b>Hissedilen:</b> <span class="${hi>=40?'risk-high':''}">${hi.toFixed(1)}°C</span> |
-         <b>Nem:</b> ${p.humidity.toFixed(1)}% |
-         <b>Toprak Nemi:</b> ${p.soil_moisture!=null ? p.soil_moisture.toFixed(1)+'%' : '—'}
+         <b>Nem:</b> ${best.humidity.toFixed(1)}% |
+         <b>Toprak Nemi:</b> ${best.soil_moisture!=null ? best.soil_moisture.toFixed(1)+'%' : '—'}
          ${hi>=50 ? ' | <span class="risk-high">⚠️ TEHLİKE!</span>' : ''}`;
     });
 
@@ -166,62 +151,57 @@
     };
     legend.addTo(map);
 
-    // 🔹 Geçmiş butonu → Chart.js grafiği
+    // 🔹 Popup içi grafik
     document.addEventListener('click', async (e)=>{
       const btn = e.target.closest('.show-history');
       if(!btn) return;
       const lat = parseFloat(btn.getAttribute('data-lat'));
       const lon = parseFloat(btn.getAttribute('data-lon'));
-      const canvasId = btn.getAttribute('data-box');
-      const ctx = document.getElementById(canvasId).getContext('2d');
+      const idKey = btn.getAttribute('data-id');
+      const ctx = document.getElementById("hist-"+idKey).getContext('2d');
 
       try{
         const res = await fetch(`/history?lat=${lat}&lon=${lon}&hours=2`);
         const data = await res.json();
         if(!Array.isArray(data) || data.length===0){
-          ctx.font = "14px Arial";
-          ctx.fillText("Veri yok", 20, 60);
-          return;
+          ctx.font = "14px Arial"; ctx.fillText("Veri yok", 20, 60); return;
         }
         const labels = data.map(r=> new Date(r.timestamp).toLocaleTimeString());
         const temps  = data.map(r=> r.temperature);
         const soils  = data.map(r=> r.soil_moisture);
 
-        new Chart(ctx, {
+        if(charts[idKey]) charts[idKey].destroy(); // varsa sıfırla
+        charts[idKey] = new Chart(ctx, {
           type: 'line',
           data: {
             labels: labels,
             datasets: [
-              {
-                label: "Sıcaklık (°C)",
-                data: temps,
-                borderColor: "red",
-                backgroundColor: "rgba(255,0,0,0.2)",
-                fill: false,
-                tension: 0.2
-              },
-              {
-                label: "Toprak Nem (%)",
-                data: soils,
-                borderColor: "blue",
-                backgroundColor: "rgba(0,0,255,0.2)",
-                fill: false,
-                tension: 0.2
-              }
+              { label:"Sıcaklık (°C)", data:temps, borderColor:"red", fill:false, tension:0.2 },
+              { label:"Toprak Nem (%)", data:soils, borderColor:"blue", fill:false, tension:0.2 }
             ]
           },
           options: {
             responsive: false,
-            plugins: { legend: { display: true, labels: { color: "#fff" } } },
-            scales: {
-              x: { ticks: { color: "#fff" } },
-              y: { ticks: { color: "#fff" } }
-            }
+            plugins: { legend: { labels: { color: "#fff" } } },
+            scales: { x:{ ticks:{ color:"#fff"} }, y:{ ticks:{ color:"#fff"} } }
           }
         });
+
+        // 🔁 Grafiği canlı güncelle (5 sn)
+        setInterval(async ()=>{
+          if(!charts[idKey]) return;
+          const r = await fetch(`/history?lat=${lat}&lon=${lon}&hours=2`);
+          const d = await r.json();
+          if(Array.isArray(d) && d.length>0){
+            charts[idKey].data.labels = d.map(r=> new Date(r.timestamp).toLocaleTimeString());
+            charts[idKey].data.datasets[0].data = d.map(r=> r.temperature);
+            charts[idKey].data.datasets[1].data = d.map(r=> r.soil_moisture);
+            charts[idKey].update();
+          }
+        }, 5000);
+
       }catch(err){
-        ctx.font = "14px Arial";
-        ctx.fillText("Hata!", 20, 60);
+        ctx.font = "14px Arial"; ctx.fillText("Hata!", 20, 60);
       }
     });
   </script>
