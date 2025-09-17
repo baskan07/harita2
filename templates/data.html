@@ -27,10 +27,6 @@
       border-radius: 4px; border: 1px solid rgba(255,255,255,0.3);
     }
     .risk-high { color:#ff3333; font-weight:bold; text-shadow:0 0 3px rgba(255,0,0,.5); }
-    .hist-btn {
-      margin-top:6px; padding:6px 10px; border:none; border-radius:6px; cursor:pointer;
-      background:#1e88e5; color:#fff; font-weight:600;
-    }
     .hist-box { margin-top:8px; font-size:12px; }
   </style>
 </head>
@@ -67,13 +63,14 @@
     const markerCluster = L.markerClusterGroup();
     map.addLayer(markerCluster);
 
-    const markers = {};  // idKey → marker
-    const charts = {};   // idKey → chart instance
+    const markers = {};   // idKey → marker
+    const chartTimers = {}; // idKey → interval ID
+    const charts = {};    // idKey → chart instance
 
     function buildPopup(p, idKey){
       const hi = p.heat_index;
       return `
-        <div style="min-width:230px">
+        <div style="min-width:240px">
           <b>Konum:</b> ${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}<br>
           <b>Sıcaklık:</b> ${p.temperature.toFixed(1)}°C<br>
           <b>Hissedilen:</b> <span class="${hi>=40?'risk-high':''}">${hi.toFixed(1)}°C</span><br>
@@ -81,7 +78,6 @@
           <b>Toprak Nemi:</b> ${p.soil_moisture!=null ? p.soil_moisture.toFixed(1)+'%' : '—'}<br>
           <b>Ölçüm Zamanı:</b> ${p.timestamp || 'Bilinmiyor'}
           ${hi>=50?'<br><span class="risk-high">⚠️ TEHLİKELİ SICAKLIK!</span>':''}
-          <br><button class="hist-btn show-history" data-lat="${p.latitude}" data-lon="${p.longitude}" data-id="${idKey}">Son 2 Saatlik Değişim</button>
           <div class="hist-box"><canvas id="hist-${idKey}" width="220" height="120"></canvas></div>
         </div>
       `;
@@ -94,14 +90,17 @@
         const color = getColorForTemperature(p.heat_index);
 
         if(!markers[idKey]){
-          // yeni marker
           const m = L.circleMarker([lat, lon], {
             radius: 6, fillColor: color, color:'#fff', weight:1, opacity:1, fillOpacity:.8
           }).bindPopup(buildPopup(p, idKey));
+
           markers[idKey] = m;
           markerCluster.addLayer(m);
+
+          // grafik açma/kapatma eventleri
+          m.on('popupopen', ()=> startChart(lat, lon, idKey));
+          m.on('popupclose', ()=> stopChart(idKey));
         } else {
-          // mevcut marker → popup içeriğini güncelle
           markers[idKey].setPopupContent(buildPopup(p, idKey));
         }
       });
@@ -151,16 +150,10 @@
     };
     legend.addTo(map);
 
-    // 🔹 Popup içi grafik
-    document.addEventListener('click', async (e)=>{
-      const btn = e.target.closest('.show-history');
-      if(!btn) return;
-      const lat = parseFloat(btn.getAttribute('data-lat'));
-      const lon = parseFloat(btn.getAttribute('data-lon'));
-      const idKey = btn.getAttribute('data-id');
+    // 🔹 Chart açma/kapama
+    async function startChart(lat, lon, idKey){
       const ctx = document.getElementById("hist-"+idKey).getContext('2d');
-
-      try{
+      async function draw(){
         const res = await fetch(`/history?lat=${lat}&lon=${lon}&hours=2`);
         const data = await res.json();
         if(!Array.isArray(data) || data.length===0){
@@ -170,7 +163,7 @@
         const temps  = data.map(r=> r.temperature);
         const soils  = data.map(r=> r.soil_moisture);
 
-        if(charts[idKey]) charts[idKey].destroy(); // varsa sıfırla
+        if(charts[idKey]) charts[idKey].destroy();
         charts[idKey] = new Chart(ctx, {
           type: 'line',
           data: {
@@ -186,24 +179,15 @@
             scales: { x:{ ticks:{ color:"#fff"} }, y:{ ticks:{ color:"#fff"} } }
           }
         });
-
-        // 🔁 Grafiği canlı güncelle (5 sn)
-        setInterval(async ()=>{
-          if(!charts[idKey]) return;
-          const r = await fetch(`/history?lat=${lat}&lon=${lon}&hours=2`);
-          const d = await r.json();
-          if(Array.isArray(d) && d.length>0){
-            charts[idKey].data.labels = d.map(r=> new Date(r.timestamp).toLocaleTimeString());
-            charts[idKey].data.datasets[0].data = d.map(r=> r.temperature);
-            charts[idKey].data.datasets[1].data = d.map(r=> r.soil_moisture);
-            charts[idKey].update();
-          }
-        }, 5000);
-
-      }catch(err){
-        ctx.font = "14px Arial"; ctx.fillText("Hata!", 20, 60);
       }
-    });
+      await draw();
+      chartTimers[idKey] = setInterval(draw, 5000);
+    }
+
+    function stopChart(idKey){
+      if(chartTimers[idKey]){ clearInterval(chartTimers[idKey]); delete chartTimers[idKey]; }
+      if(charts[idKey]){ charts[idKey].destroy(); delete charts[idKey]; }
+    }
   </script>
 </body>
 </html>
