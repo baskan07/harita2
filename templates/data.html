@@ -72,15 +72,15 @@
     });
     map.addLayer(markerCluster);
 
-    // 🔹 Açık popup’ı hatırla
-    let lastOpenId = null;
+    // 🔹 Açık popup koordinatı
+    let lastOpenCoords = null;
     map.on('popupopen', (e)=>{
       const ll = e.popup.getLatLng();
-      lastOpenId = `${ll.lat.toFixed(5)}-${ll.lng.toFixed(5)}`;
+      lastOpenCoords = { lat: ll.lat.toFixed(5), lon: ll.lng.toFixed(5) };
     });
+    map.on('popupclose', ()=>{ lastOpenCoords = null; });
 
     function createMarkers(){
-      const reopenId = lastOpenId;
       markerCluster.clearLayers();
       sensorData.forEach(p=>{
         const hi = p.heat_index;
@@ -103,16 +103,19 @@
             <div class="hist-box"><canvas id="hist-${idKey}" width="220" height="120"></canvas></div>
           </div>
         `);
+
         markerCluster.addLayer(m);
 
-        // 🔸 Eğer bu popup açıktıysa yeniden aç
-        if (reopenId && reopenId === idKey) {
+        // 🔸 Açık popup varsa tekrar aç
+        if (lastOpenCoords &&
+            lastOpenCoords.lat == lat.toFixed(5) &&
+            lastOpenCoords.lon == lon.toFixed(5)) {
           m.once('add', ()=> setTimeout(()=> m.openPopup(), 0));
         }
       });
     }
 
-    // 🔹 Veri yükle
+    // 🔹 Veri yükleme
     async function loadData(){
       try{
         const r = await fetch('/data', { cache:'no-store' });
@@ -124,9 +127,8 @@
       }
     }
 
-    // İlk yükleme
+    // İlk yükleme ve periyodik yenileme
     loadData();
-    // 🔁 5 saniyede bir güncelle
     setInterval(loadData, 5000);
 
     // Hover özet
