@@ -43,7 +43,7 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
   <script>
-    // Renk skalası (hissedilen °C)
+    // 🔹 Renk skalası (hissedilen °C)
     const TEMP_RANGES = [
       { min: -20, max: 0,  color: '#1a237e', label: '-20 - 0°C'  },
       { min: 0,   max: 10, color: '#1976d2', label: '0 - 10°C'   },
@@ -72,7 +72,15 @@
     });
     map.addLayer(markerCluster);
 
+    // 🔹 Açık popup’ı hatırla
+    let lastOpenId = null;
+    map.on('popupopen', (e)=>{
+      const ll = e.popup.getLatLng();
+      lastOpenId = `${ll.lat.toFixed(5)}-${ll.lng.toFixed(5)}`;
+    });
+
     function createMarkers(){
+      const reopenId = lastOpenId;
       markerCluster.clearLayers();
       sensorData.forEach(p=>{
         const hi = p.heat_index;
@@ -96,18 +104,30 @@
           </div>
         `);
         markerCluster.addLayer(m);
+
+        // 🔸 Eğer bu popup açıktıysa yeniden aç
+        if (reopenId && reopenId === idKey) {
+          m.once('add', ()=> setTimeout(()=> m.openPopup(), 0));
+        }
       });
     }
 
-    // Veri yükle
-    fetch('/data')
-      .then(r=>r.json())
-      .then(d=>{ sensorData = d; createMarkers(); })
-      .catch(err=>{
-        console.error('Veri yüklenirken hata:', err);
-        document.getElementById('infoBox').innerHTML =
-          '<span style="color:#ff4444">Veri yüklenemedi. Lütfen tekrar deneyin.</span>';
-      });
+    // 🔹 Veri yükle
+    async function loadData(){
+      try{
+        const r = await fetch('/data', { cache:'no-store' });
+        const d = await r.json();
+        sensorData = d;
+        createMarkers();
+      }catch(err){
+        console.error("Veri alınamadı", err);
+      }
+    }
+
+    // İlk yükleme
+    loadData();
+    // 🔁 5 saniyede bir güncelle
+    setInterval(loadData, 5000);
 
     // Hover özet
     function nearestPoint(lat, lon){
@@ -144,7 +164,7 @@
     };
     legend.addTo(map);
 
-    // Geçmiş butonu (grafik çizimi)
+    // 🔹 Geçmiş butonu → Chart.js grafiği
     document.addEventListener('click', async (e)=>{
       const btn = e.target.closest('.show-history');
       if(!btn) return;
