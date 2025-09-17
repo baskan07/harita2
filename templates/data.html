@@ -63,9 +63,9 @@
     const markerCluster = L.markerClusterGroup();
     map.addLayer(markerCluster);
 
-    const markers = {};   // idKey → marker
-    const chartTimers = {}; // idKey → interval ID
-    const charts = {};    // idKey → chart instance
+    const markers = {};      // idKey → marker
+    const charts = {};       // idKey → chart instance
+    const chartTimers = {};  // idKey → interval ID
 
     function buildPopup(p, idKey){
       const hi = p.heat_index;
@@ -97,7 +97,6 @@
           markers[idKey] = m;
           markerCluster.addLayer(m);
 
-          // grafik açma/kapatma eventleri
           m.on('popupopen', ()=> startChart(lat, lon, idKey));
           m.on('popupclose', ()=> stopChart(idKey));
         } else {
@@ -150,10 +149,11 @@
     };
     legend.addTo(map);
 
-    // 🔹 Chart açma/kapama
+    // 🔹 Chart başlat/güncelle
     async function startChart(lat, lon, idKey){
       const ctx = document.getElementById("hist-"+idKey).getContext('2d');
-      async function draw(){
+
+      async function updateChart(){
         const res = await fetch(`/history?lat=${lat}&lon=${lon}&hours=2`);
         const data = await res.json();
         if(!Array.isArray(data) || data.length===0){
@@ -163,25 +163,32 @@
         const temps  = data.map(r=> r.temperature);
         const soils  = data.map(r=> r.soil_moisture);
 
-        if(charts[idKey]) charts[idKey].destroy();
-        charts[idKey] = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: [
-              { label:"Sıcaklık (°C)", data:temps, borderColor:"red", fill:false, tension:0.2 },
-              { label:"Toprak Nem (%)", data:soils, borderColor:"blue", fill:false, tension:0.2 }
-            ]
-          },
-          options: {
-            responsive: false,
-            plugins: { legend: { labels: { color: "#fff" } } },
-            scales: { x:{ ticks:{ color:"#fff"} }, y:{ ticks:{ color:"#fff"} } }
-          }
-        });
+        if(!charts[idKey]){
+          charts[idKey] = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: labels,
+              datasets: [
+                { label:"Sıcaklık (°C)", data:temps, borderColor:"red", fill:false, tension:0.2 },
+                { label:"Toprak Nem (%)", data:soils, borderColor:"blue", fill:false, tension:0.2 }
+              ]
+            },
+            options: {
+              responsive: false,
+              plugins: { legend: { labels: { color: "#fff" } } },
+              scales: { x:{ ticks:{ color:"#fff"} }, y:{ ticks:{ color:"#fff"} } }
+            }
+          });
+        } else {
+          charts[idKey].data.labels = labels;
+          charts[idKey].data.datasets[0].data = temps;
+          charts[idKey].data.datasets[1].data = soils;
+          charts[idKey].update();
+        }
       }
-      await draw();
-      chartTimers[idKey] = setInterval(draw, 5000);
+
+      await updateChart();
+      chartTimers[idKey] = setInterval(updateChart, 5000);
     }
 
     function stopChart(idKey){
