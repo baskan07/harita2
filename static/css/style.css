@@ -57,3 +57,48 @@ h1 {
     margin: 15px auto;
     box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
 }
+
+/* Chart container kutusu */
+.hist-box {
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 12px;
+  padding: 10px;
+  margin-top: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+/* Canvas daha net görünsün */
+.hist-box canvas {
+  background: #111;             /* koyu arka plan */
+  border-radius: 8px;
+  padding: 6px;
+}
+
+/* Grafik legend (etiketler) için */
+.chartjs-legend ul {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+  padding: 0;
+}
+
+.chartjs-legend li {
+  list-style: none;
+  margin: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #eee;
+}
+
+/* Tooltip görünümü */
+.chartjs-tooltip {
+  background: rgba(0,0,0,0.85);
+  color: #fff;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+
